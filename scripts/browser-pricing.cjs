@@ -15,6 +15,7 @@ async function main(){
    const req=route.request(),url=new URL(req.url()),send=(data,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
    if(url.pathname==='/api/auth/me')return send({user:{id,telegramChatId:'8563274673',role:'ADMIN'}});
    if(url.pathname==='/api/ai/status')return send({providers:{gemini:{state:'ready'},openai:{state:'unconfigured'}},telegramBot:{running:true}});
+   if(url.pathname==='/api/ai/draft-chat')return send({entries:[]});
    if(url.pathname==='/api/clients/'+id)return send({client:{id,name:'Synthetic pricing client',status:'LEAD',estimatedVolume:80000,conversations:[],deals:[],aiSuggestions:[],createdAt:new Date().toISOString(),lastContactAt:new Date().toISOString()}});
    if(url.pathname==='/api/ai/pricing')return sourceAvailable?send({snapshot:{hash:'test-pricing',sourceUrl:'https://tanbox.kz/api/tariffs',checkedAt:new Date().toISOString(),pricing}}):send({error:'Pricing source unavailable'},503);
    if(url.pathname==='/api/ai/quotes'&&req.method()==='GET')return send({quotes:quote?[quote]:[],total:quote?1:0});
