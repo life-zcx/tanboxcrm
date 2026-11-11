@@ -22,8 +22,11 @@ jobs:
       - run: npm --prefix backend audit --omit=dev
       - run: npm --prefix frontend audit --omit=dev
       - run: docker compose up -d --build --wait
-      - working-directory: frontend
-        run: npx playwright-core install --with-deps chromium
+      - name: Use installed Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable)"
+          test -x "$chrome"
+          echo "CHROMIUM_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
       - run: node scripts/browser-regression.cjs
       - run: node scripts/browser-client-tools.cjs
       - run: node scripts/browser-pricing.cjs
