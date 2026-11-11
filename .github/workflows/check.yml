@@ -1,0 +1,31 @@
+name: CRM checks
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm --prefix backend ci
+      - run: npm --prefix frontend ci
+      - run: node scripts/ci-env.cjs
+      - run: npm --prefix backend run build
+      - run: npm --prefix frontend run build
+      - run: node scripts/test-isolated.cjs
+      - run: npm --prefix backend audit --omit=dev
+      - run: npm --prefix frontend audit --omit=dev
+      - run: docker compose up -d --build --wait
+      - working-directory: frontend
+        run: npx playwright-core install --with-deps chromium
+      - run: node scripts/browser-regression.cjs
+      - run: node scripts/browser-client-tools.cjs
+      - run: node scripts/browser-pricing.cjs
+      - if: always()
+        run: docker compose down

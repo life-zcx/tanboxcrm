@@ -1,0 +1,14 @@
+**/node_modules/
+**/dist/
+.env
+**/.env
+**/.env.*
+!**/.env.example
+backend/uploads/
+backend/prisma/*.db*
+backups/
+audit-build/
+test-results/
+backend/data/web-captures.ndjson
+backend/data/web-supplement.ndjson
+*.log

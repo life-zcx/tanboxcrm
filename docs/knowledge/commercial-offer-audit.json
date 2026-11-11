@@ -1,0 +1,94 @@
+{
+  "checkedAt": "2026-11-10T19:18:24.308Z",
+  "status": "COMMERCIAL_DOCUMENT_REVIEW_NOT_GENERAL_PRICE_APPROVAL",
+  "pricingSource": {
+    "url": "https://tanbox.kz/api/tariffs",
+    "fetchedAt": "2026-11-10T19:10:59.944Z",
+    "sha256": "ed986751b37029127d1f3324b92fb2dad10cbc7ea1033d356aca7aa105b73fbd"
+  },
+  "documents": [
+    {
+      "filename": "TANBOX_KP_BAD_20000 (1).pdf",
+      "sha256": "6cb33d86cdbcfdd7fff1145b0edd43a57ed8f2f1bffaa22e1aef50eab069b711",
+      "bytes": 91206
+    },
+    {
+      "filename": "TANBOX_Price (2).pdf",
+      "sha256": "7b9f6ed010e07b4f5e91f014d16d7fcb559098fe97778e4ab1f9c35ca8753f8a",
+      "bytes": 76039
+    },
+    {
+      "filename": "TANBOX_Price (3).pdf",
+      "sha256": "7b9f6ed010e07b4f5e91f014d16d7fcb559098fe97778e4ab1f9c35ca8753f8a",
+      "bytes": 76039,
+      "duplicateOf": "TANBOX_Price (2).pdf"
+    },
+    {
+      "filename": "tanbox kp bad.pdf",
+      "sha256": "5955c2bc638fc2eb8ff95d1bf423e21d6ff7d7b0ffd07f7db1edd9398defb4a7",
+      "bytes": 860369
+    },
+    {
+      "filename": "tanbox kp textile.pdf",
+      "sha256": "d941e526acdae277817f0cef63c04c95003fcac936c37bec5e38ec2064ebf256",
+      "bytes": 88739
+    }
+  ],
+  "bad": {
+    "quantity": 20000,
+    "cards": 30,
+    "brackets": [
+      {
+        "count": 5000,
+        "rate": 42,
+        "subtotal": 210000
+      },
+      {
+        "count": 15000,
+        "rate": 39,
+        "subtotal": 585000
+      },
+      {
+        "count": 0,
+        "rate": 32,
+        "subtotal": 0
+      }
+    ],
+    "marking": 795000,
+    "markingAveragePerUnit": 39.75,
+    "cardTotal": 9000,
+    "setup": 79900,
+    "base": 883900,
+    "discount": 133900,
+    "discountPercentExact": 15.14877248557529,
+    "displayPercent": 15.15,
+    "final": 750000,
+    "strict15PercentTotal": 751315,
+    "extraRoundingReduction": 1315,
+    "originalArithmeticValid": true,
+    "discountArithmeticValid": true,
+    "codesOperatorFeeIncluded": false,
+    "warehouseAndBrokerIncluded": false
+  },
+  "equipment": {
+    "lineAmounts": [
+      145000,
+      15000,
+      10000,
+      15000,
+      60000
+    ],
+    "total": 245000,
+    "arithmeticValid": true,
+    "preliminary": true,
+    "privateTrainingLine": 60000,
+    "publicCoursePrice": 85000,
+    "sameTrainingProductConfirmed": false
+  },
+  "limitations": [
+    "This checks the provided offers and public TANBOX rates, not legislation.",
+    "Individual discounts, hardware prices, teaching scope and deadlines are not general tariffs.",
+    "Website pricing is a timestamped snapshot, not an indefinitely valid quote.",
+    "Silence does not establish a reason for rejection."
+  ]
+}

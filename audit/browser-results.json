@@ -1,0 +1,64 @@
+{
+  "freshLoad": {
+    "ms": 584,
+    "events": [
+      {
+        "type": "response",
+        "path": "/",
+        "status": 200,
+        "ms": 14
+      },
+      {
+        "type": "response",
+        "path": "/assets/index-CtBfuMsL.css",
+        "status": 200,
+        "ms": 29
+      },
+      {
+        "type": "response",
+        "path": "/assets/index-De9CzQeG.js",
+        "status": 200,
+        "ms": 32
+      },
+      {
+        "type": "response",
+        "path": "/tanbox-dark.svg",
+        "status": 200,
+        "ms": 76
+      },
+      {
+        "type": "response",
+        "path": "/favicon.svg",
+        "status": 200,
+        "ms": 79
+      }
+    ],
+    "loginVisible": true
+  },
+  "loginTyped": {
+    "requests": [],
+    "validationVisible": true
+  },
+  "loginExplicitSubmit": {
+    "requests": [
+      "123456"
+    ]
+  },
+  "loginPasted": {
+    "requests": []
+  },
+  "temporaryServerFailure": {
+    "tokenRemoved": true,
+    "showsLogin": true
+  },
+  "failedData": {
+    "emptyColumns": 5,
+    "errorShown": false
+  },
+  "missingAsset": {
+    "errors": [
+      "Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of \"text/html\". Strict MIME type checking is enforced for module scripts per HTML spec."
+    ],
+    "rootChildren": 0
+  }
+}

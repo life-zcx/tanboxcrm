@@ -1,0 +1,190 @@
+[
+  {
+    "run": 1,
+    "hostname": "127.0.0.1",
+    "resource": "/",
+    "port": 3050,
+    "ms": 27,
+    "status": 200,
+    "bytes": 630,
+    "contentType": "text/html"
+  },
+  {
+    "run": 1,
+    "hostname": "127.0.0.1",
+    "resource": "/assets/index-De9CzQeG.js",
+    "port": 3050,
+    "ms": 25,
+    "status": 200,
+    "bytes": 220695,
+    "contentType": "application/javascript"
+  },
+  {
+    "run": 1,
+    "hostname": "127.0.0.1",
+    "resource": "/api/health",
+    "port": 3050,
+    "ms": 30,
+    "status": 200,
+    "bytes": 83,
+    "contentType": "application/json; charset=utf-8"
+  },
+  {
+    "run": 1,
+    "hostname": "::1",
+    "resource": "/",
+    "port": 3050,
+    "ms": 14,
+    "status": 200,
+    "bytes": 630,
+    "contentType": "text/html"
+  },
+  {
+    "run": 1,
+    "hostname": "::1",
+    "resource": "/assets/index-De9CzQeG.js",
+    "port": 3050,
+    "ms": 33,
+    "status": 200,
+    "bytes": 220695,
+    "contentType": "application/javascript"
+  },
+  {
+    "run": 1,
+    "hostname": "::1",
+    "resource": "/api/health",
+    "port": 3050,
+    "ms": 4006,
+    "timeout": true
+  },
+  {
+    "run": 2,
+    "hostname": "127.0.0.1",
+    "resource": "/",
+    "port": 3050,
+    "ms": 8,
+    "status": 200,
+    "bytes": 630,
+    "contentType": "text/html"
+  },
+  {
+    "run": 2,
+    "hostname": "127.0.0.1",
+    "resource": "/assets/index-De9CzQeG.js",
+    "port": 3050,
+    "ms": 9,
+    "status": 200,
+    "bytes": 220695,
+    "contentType": "application/javascript"
+  },
+  {
+    "run": 2,
+    "hostname": "127.0.0.1",
+    "resource": "/api/health",
+    "port": 3050,
+    "ms": 9,
+    "status": 200,
+    "bytes": 83,
+    "contentType": "application/json; charset=utf-8"
+  },
+  {
+    "run": 2,
+    "hostname": "::1",
+    "resource": "/",
+    "port": 3050,
+    "ms": 6,
+    "status": 200,
+    "bytes": 630,
+    "contentType": "text/html"
+  },
+  {
+    "run": 2,
+    "hostname": "::1",
+    "resource": "/assets/index-De9CzQeG.js",
+    "port": 3050,
+    "ms": 4018,
+    "timeout": true
+  },
+  {
+    "run": 2,
+    "hostname": "::1",
+    "resource": "/api/health",
+    "port": 3050,
+    "ms": 4018,
+    "timeout": true
+  },
+  {
+    "run": 3,
+    "hostname": "127.0.0.1",
+    "resource": "/",
+    "port": 3050,
+    "ms": 3,
+    "status": 200,
+    "bytes": 630,
+    "contentType": "text/html"
+  },
+  {
+    "run": 3,
+    "hostname": "127.0.0.1",
+    "resource": "/assets/index-De9CzQeG.js",
+    "port": 3050,
+    "ms": 7,
+    "status": 200,
+    "bytes": 220695,
+    "contentType": "application/javascript"
+  },
+  {
+    "run": 3,
+    "hostname": "127.0.0.1",
+    "resource": "/api/health",
+    "port": 3050,
+    "ms": 7,
+    "status": 200,
+    "bytes": 83,
+    "contentType": "application/json; charset=utf-8"
+  },
+  {
+    "run": 3,
+    "hostname": "::1",
+    "resource": "/",
+    "port": 3050,
+    "ms": 7,
+    "status": 200,
+    "bytes": 630,
+    "contentType": "text/html"
+  },
+  {
+    "run": 3,
+    "hostname": "::1",
+    "resource": "/assets/index-De9CzQeG.js",
+    "port": 3050,
+    "ms": 4008,
+    "timeout": true
+  },
+  {
+    "run": 3,
+    "hostname": "::1",
+    "resource": "/api/health",
+    "port": 3050,
+    "ms": 4008,
+    "timeout": true
+  },
+  {
+    "hostname": "127.0.0.1",
+    "resource": "/api/health",
+    "port": 5055,
+    "ms": 5,
+    "status": 200,
+    "bytes": 83,
+    "contentType": "application/json; charset=utf-8"
+  },
+  {
+    "hostname": "::1",
+    "resource": "/api/health",
+    "port": 5055,
+    "ms": 6,
+    "status": 200,
+    "bytes": 83,
+    "contentType": "application/json; charset=utf-8"
+  }
+]

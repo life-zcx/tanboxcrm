@@ -1,0 +1,149 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id              String   @id @default(uuid())
+  name            String
+  phone           String?
+  company         String?
+  binIin          String?
+  category        String?  // SHOES, CLOTHES, MEDICINE, WATER, TOBACCO, OTHER
+  status          String   @default("LEAD") // LEAD, IN_NEGOTIATION, KP_SENT, PAYMENT_PENDING, IN_PROGRESS, WON, LOST
+  stage           String   @default("NEW")  // NEW, WARM, HOT, CLOSED
+  estimatedVolume Int?     // Например, 5000 кодов
+  estimatedAmount Float?   // В тенге ₸
+  
+  // Сводка по клиенту
+  aiSummary       String?  // Выжимка текущей ситуации
+  aiSentiment     String?  // Статус готовности (например, READY_TO_PAY, POSITIVE)
+  aiObjections    String?  // Зафиксированные возражения ("дорого", "нет времени")
+  aiNextStep      String?  // Следующее целевое действие
+  
+  notes           String?
+  lastContactAt   DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  conversations   ConversationChunk[]
+  deals           Deal[]
+  aiSuggestions   AISuggestion[]
+
+  @@index([phone])
+  @@index([status])
+  @@index([company])
+}
+
+model ConversationChunk {
+  id            String    @id @default(uuid())
+  clientId      String
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  channel       String    @default("WHATSAPP") // WHATSAPP, TELEGRAM, CALL, IN_PERSON
+  rawText       String?   // Исходный текст или распознанный OCR
+  screenshotUrl String?   // Путь к файлу скриншота (или список скриншотов через запятую)
+  summary       String?   // Суть фрагмента диалога
+  extractedInfo String?   // JSON строка с распознанными сущностями
+  source        String    @default("WEB_PANEL") // TELEGRAM_BOT, WEB_PANEL, IMPORT
+  createdAt     DateTime  @default(now())
+
+  messages      Message[]
+
+  @@index([clientId])
+  @@index([createdAt])
+}
+
+model Message {
+  id          String            @id @default(uuid())
+  chunkId     String
+  chunk       ConversationChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  sender      String            // CLIENT, MANAGER, SYSTEM
+  senderName  String?
+  content     String
+  timestamp   DateTime?
+  createdAt   DateTime          @default(now())
+
+  @@index([chunkId])
+}
+
+model AISuggestion {
+  id            String   @id @default(uuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  provider      String   // GEMINI, OPENAI
+  model         String?
+  promptType    String   // REPLY_SUGGESTION, OBJECTION_HANDLING, COMMERCIAL_OFFER, SUMMARY
+  query         String?  // Запрос менеджера
+  suggestedText String   // Готовый ответ для WhatsApp
+  explanation   String?  // Логика ответа
+  wasCopied     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([clientId])
+}
+
+model Deal {
+  id          String    @id @default(uuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title       String
+  stage       String    @default("NEW") // NEW, QUALIFIED, OFFER_SENT, INVOICED, PAID, CLOSED_LOST
+  amount      Float?
+  services    String?   // JSON array
+  codesCount  Int?
+  deadline    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([stage])
+}
+
+model KnowledgeItem {
+  id        String   @id @default(uuid())
+  category  String   // TARIFFS, IS_MPT_RULES, OBJECTIONS, STICKERING, FAQ
+  title     String
+  content   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+model SystemSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model AuthCode {
+  id               String   @id @default(uuid())
+  code             String
+  telegramChatId   String
+  telegramUsername String?
+  expiresAt        DateTime
+  isUsed           Boolean  @default(false)
+  ip               String?
+  createdAt        DateTime @default(now())
+
+  @@index([code])
+  @@index([telegramChatId])
+}
+
+model AdminUser {
+  id               String   @id @default(uuid())
+  telegramChatId   String   @unique
+  telegramUsername String?
+  role             String   @default("ADMIN")
+  lastLoginAt      DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  @@index([telegramChatId])
+}

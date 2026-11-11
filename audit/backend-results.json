@@ -1,0 +1,38 @@
+{
+  "masterCodeWithoutOTP": {
+    "status": 200,
+    "tokenIssued": true
+  },
+  "concurrentCodeReuse": {
+    "issuedTokens": 2
+  },
+  "unapprovedTelegramLogin": {
+    "roleCreated": "ADMIN",
+    "otpSent": true
+  },
+  "forgedJWTLiveReadOnly": {
+    "crmStatus": 200,
+    "meStatus": 401
+  },
+  "screenshotWithoutAuthentication": {
+    "status": 200,
+    "type": "image/jpeg"
+  },
+  "htmlAcceptedAsImage": {
+    "status": 200,
+    "extension": ".html",
+    "servedType": "text/html; charset=UTF-8"
+  },
+  "ingestWithoutDeal": {
+    "clientsCreated": 1,
+    "dealsCreated": 0
+  },
+  "unrestrictedClientUpdate": {
+    "idChangeForwarded": true,
+    "nestedDeleteForwarded": true
+  },
+  "concurrentTelegramImages": {
+    "inputImages": 2,
+    "retainedImages": 1
+  }
+}

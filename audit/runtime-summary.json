@@ -1,0 +1,19 @@
+{
+  "observedLogOccurrences": {
+    "gemini429": 1,
+    "gemini503": 4,
+    "telegram409": 1,
+    "telegramMarkdown400": 1
+  },
+  "backendState": {
+    "status": "running",
+    "oomKilled": false
+  },
+  "notes": [
+    "IPv6 loopback port 3050 is owned by wslrelay.exe; wildcard listener is com.docker.backend.exe.",
+    "JWT_SECRET and ADMIN_API_KEY match the code defaults in the running backend.",
+    "Runtime frontend JS SHA256 matches the source-built artifact.",
+    "All source-compiled backend JS files match existing dist files; selected live container auth/server hashes also match.",
+    "An isolated psql stdin SELECT 1/0 printed an SQL error and exited 0."
+  ]
+}

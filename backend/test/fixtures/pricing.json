@@ -1,0 +1,13 @@
+{
+  "tariffs": [
+    {"code":"DIGITAL","priceRetail":6,"priceWholesale":5,"priceLargeWholesale":4},
+    {"code":"PRINT","priceRetail":18,"priceWholesale":16,"priceLargeWholesale":13},
+    {"code":"STANDARD","priceRetail":42,"priceWholesale":39,"priceLargeWholesale":32},
+    {"code":"PRO","priceRetail":72,"priceWholesale":65,"priceLargeWholesale":55}
+  ],
+  "pricingSettings": {
+    "volumeTier1":5000,"volumeTier2":25000,"ssccPrice":50,"stickerLayoutPrice":5000,
+    "selfLayoutPrice":1000,"urgentPercent":25,"expressDeliveryPrice":15000,
+    "outsourcingOneTimePrice":79900,"cardNktPrice":150,"cardMptPrice":200,"cardFullPackagePrice":300
+  }
+}

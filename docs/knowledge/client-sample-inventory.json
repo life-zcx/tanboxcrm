@@ -1,0 +1,119 @@
+{
+  "analyzedAt": "2026-11-10T18:57:07.141Z",
+  "method": "LOCAL_READ_ONLY_NO_EXTERNAL_MODEL",
+  "sourceFileCount": 6,
+  "meaningfulConversations": 5,
+  "limitations": [
+    "Only the text present in files was analyzed.",
+    "Attachments, voice messages and calls have no supplied content.",
+    "No response reported by owner; no paid or lost outcomes inferred."
+  ],
+  "records": [
+    {
+      "file": "1.md",
+      "sha256": "201e9d3cdaed35b1414aaa8b9c80ee1fdb76ecd2202e3bafaffdf1114a92698d",
+      "bytes": 7099,
+      "dates": [
+        "9 ноября 2026 г.",
+        "10 ноября 2026 г."
+      ],
+      "messages": 23,
+      "clientMessages": 13,
+      "managerMessages": 10,
+      "documents": 2,
+      "voice": 1,
+      "calls": 0,
+      "missingUnsupportedMessage": true,
+      "contentAvailable": true,
+      "ownerReportedOutcome": "NO_RESPONSE_AFTER_LAST_OUTREACH"
+    },
+    {
+      "file": "2.md",
+      "sha256": "38741dc0a2ccf4c6ac95103e536a0ac530af5df4ccb219eac75744b1f29e859d",
+      "bytes": 11887,
+      "dates": [
+        "8 ноября 2026 г.",
+        "9 ноября 2026 г."
+      ],
+      "messages": 25,
+      "clientMessages": 16,
+      "managerMessages": 9,
+      "documents": 0,
+      "voice": 0,
+      "calls": 0,
+      "missingUnsupportedMessage": true,
+      "contentAvailable": true,
+      "ownerReportedOutcome": "NO_RESPONSE_AFTER_LAST_OUTREACH"
+    },
+    {
+      "file": "3.md",
+      "sha256": "b7f106118c2503a9fdb723f1d8dfa137e71f6b97d7ba162bbd21a83fbb01dd1c",
+      "bytes": 2498,
+      "dates": [
+        "9 ноября 2026 г."
+      ],
+      "messages": 9,
+      "clientMessages": 6,
+      "managerMessages": 3,
+      "documents": 1,
+      "voice": 0,
+      "calls": 0,
+      "missingUnsupportedMessage": true,
+      "contentAvailable": true,
+      "ownerReportedOutcome": "NO_RESPONSE_AFTER_LAST_OUTREACH"
+    },
+    {
+      "file": "4.md",
+      "sha256": "e0c8203d2ac85145b957d130cff2b901a3b457894dbae1158d03b1a7dfb98a50",
+      "bytes": 3608,
+      "dates": [
+        "5 ноября 2026 г.",
+        "6 ноября 2026 г."
+      ],
+      "messages": 8,
+      "clientMessages": 5,
+      "managerMessages": 3,
+      "documents": 1,
+      "voice": 0,
+      "calls": 0,
+      "missingUnsupportedMessage": false,
+      "contentAvailable": true,
+      "ownerReportedOutcome": "NO_RESPONSE_AFTER_LAST_OUTREACH"
+    },
+    {
+      "file": "5.md",
+      "sha256": "db2678ad45bb2a575f6f9e1537c947b80465d0fd26c30b80bef3635452bdcac3",
+      "bytes": 592,
+      "dates": [
+        "9 ноября 2026 г."
+      ],
+      "messages": 0,
+      "clientMessages": 0,
+      "managerMessages": 0,
+      "documents": 0,
+      "voice": 0,
+      "calls": 0,
+      "missingUnsupportedMessage": true,
+      "contentAvailable": false,
+      "ownerReportedOutcome": "INSUFFICIENT_CONTENT"
+    },
+    {
+      "file": "6.md",
+      "sha256": "b3f3ad5c62a592d95a28b0420ac7bb695d293b7e47c124310b764efba8908b20",
+      "bytes": 3415,
+      "dates": [
+        "9 ноября 2026 г.",
+        "10 ноября 2026 г."
+      ],
+      "messages": 16,
+      "clientMessages": 9,
+      "managerMessages": 7,
+      "documents": 1,
+      "voice": 0,
+      "calls": 5,
+      "missingUnsupportedMessage": false,
+      "contentAvailable": true,
+      "ownerReportedOutcome": "NO_RESPONSE_AFTER_LAST_OUTREACH"
+    }
+  ]
+}

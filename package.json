@@ -1,0 +1,10 @@
+{
+  "name": "tanbox-crm",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "test": "node scripts/test-isolated.cjs",
+    "test:browser": "node scripts/browser-regression.cjs && node scripts/browser-client-tools.cjs && node scripts/browser-pricing.cjs",
+    "start": "docker compose up -d --build --wait"
+  }
+}
