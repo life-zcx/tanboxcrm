@@ -17,6 +17,7 @@ import {deleteClientCompletely} from '../modules/clients/client-deletion.service
 import {activeArchive,archiveDocument,splitPassages} from '../knowledge/archive.service';
 import {webOverview,usableFacts} from '../knowledge/web.service';
 import {quoteForReply,quoteText} from '../pricing/pricing.service';
+import {clientWidgetHtml,widgetStatusLabels} from './client-widget';
 export const BOT_LABELS={upload:'📸 Загрузить переписку',clients:'👥 Клиенты',reply:'💡 Что ответить',pipeline:'📊 Воронка',knowledge:'📚 База знаний',login:'🔐 Вход в веб',help:'❓ Помощь'} as const;
 const labels:Record<string,string>={LEAD:'Новый лид',IN_NEGOTIATION:'В переговорах',KP_SENT:'КП отправлено',PAYMENT_PENDING:'Ожидает оплаты',IN_PROGRESS:'В работе',WON:'Оплачено',LOST:'Отказ'};
 const stageLabels:Record<string,string>={NEW:'Новые лиды',QUALIFIED:'В переговорах',OFFER_SENT:'КП отправлено',INVOICED:'Ожидают оплаты',PAID:'Оплачено',CLOSED_LOST:'Отказы'};
@@ -103,6 +104,7 @@ export class TelegramBotService {
     if(!client)throw new AppError(404,'Клиент не найден');
     this.session(ctx).activeClientId=id;
     const rows:InlineKeyboardButton[][]=[
+      [Markup.button.callback('🧩 Интерактивная карточка','widget:'+id)],
       [Markup.button.callback('💡 Что ответить','pickreply:'+id)],
       [Markup.button.callback('📎 Добавить переписку','pickattach:'+id),Markup.button.callback('📊 Изменить статус','status:'+id)],
       [Markup.button.callback('🕘 Последняя переписка','history:'+id)],
@@ -113,6 +115,42 @@ export class TelegramBotService {
       const web=this.webLink('/clients/'+id);if(web)rows.push([web]);
     rows.push([Markup.button.callback('← Клиенты','clients:0'),Markup.button.callback('Главное меню','home')]);
     await this.reply(ctx,'👤 '+client.name+'\n🏢 '+(client.company||'Компания не указана')+'\n📞 '+(client.phone||'Нет телефона')+'\nБИН/ИИН: '+(client.binIin||'—')+'\nОбъём: '+(client.estimatedVolume??'не указан')+'\nСтатус: '+(labels[client.status]||client.status)+'\n\nСитуация: '+(client.aiSummary||'Нет сводки').slice(0,1200)+'\n\nСледующий шаг: '+(client.aiNextStep||'Уточнить задачу').slice(0,800)+'\n\nПереписок: '+client._count.conversations+' · Сделок: '+client._count.deals,{...Markup.inlineKeyboard(rows)});
+  }
+  private async sendClientWidget(ctx:Context,id:string){
+    if(ctx.chat?.type!=='private')return;
+    const client=await prisma.client.findUnique({where:{id},select:{id:true,name:true,company:true,status:true,aiNextStep:true}});
+    if(!client)throw new AppError(404,'Клиент не найден');
+    await (this.bot!.telegram as any).callApi('sendWidget',{
+      chat_id:ctx.chat.id,html:clientWidgetHtml(client),allow_queries:true,
+      caption:'Карточка клиента · TANBOX CRM',
+    });
+  }
+  private async handleWidgetQuery(query:any){
+    const answer=async(data:object)=>{
+      await (this.bot!.telegram as any).callApi('answerWidgetQuery',{widget_query_id:query.id,data:JSON.stringify(data)});
+    };
+    try{
+      if(!query.chat||query.chat.type!=='private'||String(query.chat.id)!==String(query.from?.id)||!query.message_id){await answer({ok:false,error:'Доступно только в личном чате'});return;}
+      const userId=String(query.from.id);
+      if(!isOwner(query.from.id)){
+        const user=await prisma.adminUser.findUnique({where:{telegramChatId:userId}});
+        if(!user||!hasAccess(user)){await answer({ok:false,error:'Доступ к CRM не разрешён'});return;}
+      }
+      const match=/^w:(refresh|set):([0-9a-f-]{36})(?::([A-Z_]+))?$/.exec(query.data||'');
+      if(!match){await answer({ok:false,error:'Неизвестное действие'});return;}
+      const id=idSchema.parse(match[2]);
+      if(match[1]==='set'){
+        const status=z.enum(clientStatuses).parse(match[3]);
+        await prisma.$transaction(async tx=>{
+          await tx.client.update({where:{id},data:{status}});
+          const deal=await tx.deal.findFirst({where:{clientId:id},orderBy:{updatedAt:'desc'}});
+          if(deal)await tx.deal.update({where:{id:deal.id},data:{stage:statusToStage[status]}});
+        });
+      }
+      const client=await prisma.client.findUnique({where:{id},select:{status:true,aiNextStep:true}});
+      if(!client){await answer({ok:false,error:'Клиент не найден'});return;}
+      await answer({ok:true,label:widgetStatusLabels[client.status as keyof typeof widgetStatusLabels],next:(client.aiNextStep||'Уточнить задачу').slice(0,160)});
+    }catch(error){console.error('Widget query failed:',this.safeError(error));await answer({ok:false,error:'Не удалось обновить карточку'}).catch(()=>{});}
   }
   private async styles(ctx:Context,id:string){
     this.session(ctx).activeClientId=id;
@@ -234,6 +272,11 @@ export class TelegramBotService {
   private registerHandlers(){
     const bot=this.bot!;
     bot.use(async(ctx,next)=>{
+      const query=(ctx.update as any).widget_query;
+      if(query){await this.handleWidgetQuery(query);return;}
+      await next();
+    });
+    bot.use(async(ctx,next)=>{
       if(ctx.chat?.type!=='private'||!ctx.from)return;
       const currentUser=await prisma.adminUser.findUnique({where:{telegramChatId:String(ctx.from.id)}});
       const start=ctx.message&&'text' in ctx.message&&ctx.message.text.startsWith('/start');
@@ -266,7 +309,7 @@ export class TelegramBotService {
             return;
           }
         }
-        try{const code=await issueCode(id.data,String(ctx.from.id),ctx.from.username);await this.reply(ctx,'🔐 Код входа: '+code+'\nДействует 5 минут, только для вашего браузера. Никому не передавайте код.\n\nЧтобы работать в боте, выберите действие в меню ниже.');}
+        try{const code=await issueCode(id.data,String(ctx.from.id),ctx.from.username);await this.reply(ctx,'🔐 Код входа: <code>'+code+'</code>\nДействует 5 минут, только для вашего браузера. Никому не передавайте код.\n\nЧтобы работать в боте, выберите действие в меню ниже.',{parse_mode:'HTML',...Markup.inlineKeyboard([[{text:'📋 Скопировать код',copy_text:{text:code}} as unknown as InlineKeyboardButton]])});}
         catch(error){await this.reply(ctx,this.userError(error));}return;
       }
       if(!isOwner(ctx.from.id)){
@@ -339,6 +382,11 @@ export class TelegramBotService {
     bot.action('search',async ctx=>{await ctx.answerCbQuery();this.session(ctx).mode='search';await this.reply(ctx,'Введите имя, телефон, БИН или компанию для поиска. /cancel — отмена.');});
     bot.action('search:clear',async ctx=>{await ctx.answerCbQuery();this.session(ctx).search='';await this.clients(ctx,0);});
     bot.action(/^clients:(\d+)$/,async ctx=>{await ctx.answerCbQuery();await this.clients(ctx,Math.min(1e7,Number(ctx.match[1])));});
+    bot.action(/^widget:([0-9a-f-]{36})$/,async ctx=>{
+      await ctx.answerCbQuery();
+      try{await this.sendClientWidget(ctx,idSchema.parse(ctx.match[1]));}
+      catch(error){console.error('Widget send failed:',this.safeError(error));await this.reply(ctx,'Не удалось открыть интерактивную карточку. Обычная карточка доступна выше.');}
+    });
     bot.action(/^(dossier|pickreply|pickattach|question|history|status|price):(.+)$/,async ctx=>{
       await ctx.answerCbQuery();const action=ctx.match[1],id=idSchema.parse(ctx.match[2]),s=this.session(ctx);
       if(action==='dossier'){await this.card(ctx,id);return;}
@@ -533,7 +581,7 @@ export class TelegramBotService {
       this.state='connecting';
       this.leaseTimer=setInterval(()=>{void this.acquireLease().then(ok=>{if(!ok)throw new Error('lease lost');}).catch(()=>{this.running=false;this.starting=false;this.state='unavailable';if(this.leaseTimer)clearInterval(this.leaseTimer);try{this.bot!.stop('Lease lost');}catch{}this.scheduleRetry();});},15000);
       await this.bot.telegram.setMyCommands([{command:'menu',description:'Главное меню'},{command:'upload',description:'Добавить переписку'},{command:'review',description:'Проверить скриншоты'},{command:'clients',description:'Клиенты и поиск'},{command:'reply',description:'Что ответить клиенту'},{command:'pipeline',description:'Воронка сделок'},{command:'knowledge',description:'Тарифы и база знаний'},{command:'login',description:'Вход в веб-панель'},{command:'help',description:'Как пользоваться'}]).catch(()=>console.warn('Cannot update bot command menu'));
-      this.bot.launch({dropPendingUpdates:false},()=>{this.state='connecting';}).catch(error=>{
+      this.bot.launch({dropPendingUpdates:false,allowedUpdates:['message','callback_query','widget_query'] as any},()=>{this.state='connecting';}).catch(error=>{
         this.running=false;this.starting=false;this.state=(error?.response?.error_code||error?.code)===409?'conflict':'unavailable';
         console.warn('Telegram polling unavailable:',this.safeError(error));
         if(this.leaseTimer)clearInterval(this.leaseTimer);
