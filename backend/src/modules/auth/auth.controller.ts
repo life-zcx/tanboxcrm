@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { prisma } from '../../config/db';
-import { env, isAllowedTelegramUser } from '../../config/env';
+import { env } from '../../config/env';
+import { hasAccess, isOwner } from './access.service';
 import { route, AppError } from '../../lib/errors';
 import { matchesCode, sessionCookie, challengeCookie } from '../../lib/security';
 export const requestCode = route(async (req, res) => {
@@ -23,11 +24,13 @@ export const verifyCode = route(async (req, res) => {
     const attempt = await tx.authCode.updateMany({ where: { id: challengeId.data, isUsed: false, attempts: { lt: 5 }, expiresAt: { gt: new Date() } }, data: { attempts: { increment: 1 } } });
     if (!attempt.count) return null;
     const challenge = await tx.authCode.findUnique({ where: { id: challengeId.data } });
-    if (!challenge || !isAllowedTelegramUser(challenge.telegramChatId) || !matchesCode(challenge.id, code, challenge.code)) return null;
+    if (!challenge || !matchesCode(challenge.id, code, challenge.code)) return null;
+    const existing = await tx.adminUser.findUnique({ where: { telegramChatId: challenge.telegramChatId } });
+    if (!isOwner(challenge.telegramChatId) && (!existing || !hasAccess(existing))) return null;
     await tx.authCode.update({ where: { id: challenge.id }, data: { isUsed: true } });
     const user = await tx.adminUser.upsert({ where: { telegramChatId: challenge.telegramChatId },
-      create: { telegramChatId: challenge.telegramChatId, telegramUsername: challenge.telegramUsername, role: 'ADMIN' },
-      update: { telegramUsername: challenge.telegramUsername, role: 'ADMIN', lastLoginAt: new Date() },
+      create: { telegramChatId: challenge.telegramChatId, telegramUsername: challenge.telegramUsername, role: 'ADMIN', accessStatus: 'APPROVED' },
+      update: { telegramUsername: challenge.telegramUsername, ...(isOwner(challenge.telegramChatId) ? { role: 'ADMIN', accessStatus: 'APPROVED' } : {}), lastLoginAt: new Date() },
     });
     const session = await tx.authSession.create({ data: { userId: user.id, expiresAt: new Date(Date.now() + 8 * 3600_000) } });
     return { user, session };

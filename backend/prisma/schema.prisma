@@ -351,11 +351,27 @@ model AdminUser {
   telegramChatId   String   @unique
   telegramUsername String?
   role             String   @default("ADMIN")
+  accessStatus     String   @default("PENDING")
+  requestedAt      DateTime?
+  approvedAt       DateTime?
+  approvedById     String?
   lastLoginAt      DateTime @default(now())
   createdAt        DateTime @default(now())
   sessions         AuthSession[]
+  accessEvents     AccessEvent[]
 
   @@index([telegramChatId])
+}
+
+model AccessEvent {
+  id          String    @id @default(uuid())
+  userId      String
+  user        AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actorId     String?
+  action      String
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model AuthSession {

@@ -1,4 +1,5 @@
 import type { Client, Deal, AIStatus, AdminUser, ConversationChunk, Message, AISuggestion } from './api';
+export interface AccessUser { id:string; telegramChatId:string; telegramUsername:string|null; role:string; accessStatus:string; requestedAt:string|null; approvedAt:string|null; lastLoginAt:string; }
 export class ApiError extends Error {constructor(public status:number,message:string){super(message);}}
 async function request<T>(path:string,options:RequestInit={},timeout=12000):Promise<T>{
   const method=options.method||'GET';
@@ -30,6 +31,8 @@ async function request<T>(path:string,options:RequestInit={},timeout=12000):Prom
 const body=(value:unknown)=>JSON.stringify(value);
 const query=(filters:Record<string,unknown>,includeAll=false)=>{const p=new URLSearchParams();Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!==''&&(includeAll||v!=='ALL'))p.set(k,String(v));});return p.toString();};
 export const api={
+  getAccessUsers:()=>request<{users:AccessUser[]}>('/access'),
+  decideAccess:(id:string,action:'APPROVE'|'REJECT'|'REVOKE')=>request<{user:AccessUser}>('/access/'+encodeURIComponent(id)+'/decision',{method:'POST',body:body({action})}),
   requestCode:()=>request<{success:boolean;botUrl:string;expiresIn:number}>('/auth/request-code',{method:'POST',body:body({})}),
   verifyCode:(code:string)=>request<{user:AdminUser}>('/auth/verify-code',{method:'POST',body:body({code})}),
   getMe:(signal?:AbortSignal)=>request<{user:AdminUser|null}>('/auth/me',{signal}),

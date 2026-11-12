@@ -55,8 +55,8 @@ export const LoginPage: React.FC<{ onLoginSuccess: (user: AdminUser) => void }> 
 
         <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 space-y-3 text-xs text-slate-700 leading-relaxed">
           <p>
-            Получите ссылку входа, откройте бота по этой ссылке и введите выданный код. Доступ
-            разрешён только сотрудникам CRM.
+            Получите ссылку входа и откройте бота. Если у вас ещё нет доступа, бот отправит заявку владельцу.
+            После одобрения запросите новую ссылку и войдите по одноразовому коду.
           </p>
           <button
             type="button"

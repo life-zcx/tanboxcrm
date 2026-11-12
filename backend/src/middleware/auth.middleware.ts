@@ -1,6 +1,7 @@
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { isUUID } from '../lib/uuid';
-import { env, isAllowedTelegramUser } from '../config/env';
+import { env } from '../config/env';
+import { hasAccess } from '../modules/auth/access.service';
 import { prisma } from '../config/db';
 import { route, AppError } from '../lib/errors';
 export interface AuthUser { id: string; telegramChatId: string; telegramUsername: string | null; role: string; }
@@ -15,7 +16,7 @@ export const requireAuth = route(async (req, _res, next) => {
     decoded = value;
   } catch { throw new AppError(401, 'Сессия истекла. Войдите снова.'); }
   const session = await prisma.authSession.findUnique({ where: { id: decoded.jti! }, include: { user: true } });
-  if (!session || session.userId !== decoded.sub || session.expiresAt <= new Date() || !isAllowedTelegramUser(session.user.telegramChatId) || session.user.role !== 'ADMIN') throw new AppError(401, 'Сессия недействительна');
+  if (!session || session.userId !== decoded.sub || session.expiresAt <= new Date() || !hasAccess(session.user)) throw new AppError(401, 'Сессия недействительна');
   req.user = session.user;
   req.sessionId = session.id;
   next();

@@ -2,9 +2,10 @@ import {randomUUID} from 'node:crypto';
 import {Telegraf,Markup,Context} from 'telegraf';
 import type {InlineKeyboardButton} from 'telegraf/types';
 import {z} from 'zod';
-import {env,isAllowedTelegramUser} from '../config/env';
+import {env} from '../config/env';
 import {prisma} from '../config/db';
 import {issueCode} from '../modules/auth/auth.service';
+import {decideAccess,hasAccess,isOwner,requestAccess} from '../modules/auth/access.service';
 import {aiOrchestrator} from '../ai/ai.orchestrator';
 import {parsedConversationSchema} from '../ai/gemini.service';
 import {createTelegramScreenshotDraft,getTelegramScreenshotDraft,updateTelegramScreenshotDraft,commitTelegramScreenshotDraft,discardScreenshotDraft} from './screenshot-drafts.service';
@@ -46,6 +47,11 @@ export class TelegramBotService {
     }
   }
   isAvailable(){return this.running;}
+  async notifyAccess(telegramChatId:string,action:'APPROVE'|'REJECT'|'REVOKE'){
+    if(!this.bot)return;
+    const message=action==='APPROVE'?'Доступ к TANBOX CRM одобрен. Откройте сайт CRM и запросите новый код входа.':action==='REJECT'?'Заявка на доступ к TANBOX CRM отклонена.':'Доступ к TANBOX CRM отозван владельцем.';
+    try{await this.bot.telegram.sendMessage(telegramChatId,message);}catch(error){console.error('Access decision notification failed',this.safeError(error));}
+  }
   getStatus(){return {configured:!!this.bot,running:this.running,state:this.state,name:env.TELEGRAM_BOT_USERNAME};}
   private safeError(error:any){
     return String(error?.response?.description||error?.message||error?.name||'network')
@@ -228,7 +234,14 @@ export class TelegramBotService {
   private registerHandlers(){
     const bot=this.bot!;
     bot.use(async(ctx,next)=>{
-      if(ctx.chat?.type!=='private'||!ctx.from||!isAllowedTelegramUser(ctx.from.id)){if(ctx.chat?.type==='private')await ctx.reply('Доступ к CRM не разрешён.');return;}
+      if(ctx.chat?.type!=='private'||!ctx.from)return;
+      const currentUser=await prisma.adminUser.findUnique({where:{telegramChatId:String(ctx.from.id)}});
+      const start=ctx.message&&'text' in ctx.message&&ctx.message.text.startsWith('/start');
+      if(!isOwner(ctx.from.id)&&(!currentUser||!hasAccess(currentUser))&&!start){
+        if(ctx.callbackQuery)await ctx.answerCbQuery('Доступ к CRM не разрешён');
+        else await ctx.reply('Доступ к CRM не разрешён. Откройте ссылку входа с сайта CRM, чтобы отправить заявку.');
+        return;
+      }
       const id=String(ctx.from.id),now=Date.now(),isImage=ctx.message&&('photo' in ctx.message||'document' in ctx.message);
       if(!isImage&&now-(this.userRequests.get(id)||0)<350){if(ctx.callbackQuery)await ctx.answerCbQuery('Подождите немного');return;}
       if(!isImage)this.userRequests.set(id,now);await next();
@@ -238,10 +251,39 @@ export class TelegramBotService {
       if(payload.startsWith('login_')){
         const id=idSchema.safeParse(payload.slice(6));
         if(!id.success){await this.login(ctx);return;}
+        const challenge=await prisma.authCode.findFirst({where:{id:id.data,isUsed:false,expiresAt:{gt:new Date()}}});
+        if(!challenge){await ctx.reply('Ссылка входа устарела. Откройте CRM и получите новую ссылку.');return;}
+        if(!isOwner(ctx.from.id)){
+          const access=await requestAccess(String(ctx.from.id),ctx.from.username);
+          if(access.status!=='APPROVED'){
+            if(access.created&&access.user){
+              const name=[ctx.from.first_name,ctx.from.last_name].filter(Boolean).join(' ');
+              for(const ownerId of env.TELEGRAM_ALLOWED_USER_IDS){
+                try{await bot.telegram.sendMessage(ownerId,'Заявка на доступ к TANBOX CRM\n'+name+' (@'+(ctx.from.username||'нет username')+')\nTelegram ID: '+ctx.from.id,{reply_markup:{inline_keyboard:[[Markup.button.callback('Одобрить','access:approve:'+access.user.id),Markup.button.callback('Отклонить','access:reject:'+access.user.id)]]}});}catch(error){console.error('Access notification failed',this.safeError(error));}
+              }
+            }
+            await ctx.reply(access.status==='PENDING'?'Заявка на доступ отправлена владельцу. После одобрения откройте CRM и запросите новую ссылку входа.':'Доступ отклонён или отозван. Повторный запрос доступен через 24 часа.');
+            return;
+          }
+        }
         try{const code=await issueCode(id.data,String(ctx.from.id),ctx.from.username);await this.reply(ctx,'🔐 Код входа: '+code+'\nДействует 5 минут, только для вашего браузера. Никому не передавайте код.\n\nЧтобы работать в боте, выберите действие в меню ниже.');}
         catch(error){await this.reply(ctx,this.userError(error));}return;
       }
+      if(!isOwner(ctx.from.id)){
+        const user=await prisma.adminUser.findUnique({where:{telegramChatId:String(ctx.from.id)}});
+        if(!user||!hasAccess(user)){await ctx.reply('Откройте страницу входа CRM и перейдите в бот по ссылке, чтобы отправить заявку.');return;}
+      }
       await this.home(ctx);
+    });
+    bot.action(/^access:(approve|reject):([0-9a-f-]{36})$/,async ctx=>{
+      if(!isOwner(ctx.from.id)){await ctx.answerCbQuery('Недостаточно прав');return;}
+      try{
+        const user=await decideAccess(ctx.match[2],String(ctx.from.id),ctx.match[1]==='approve'?'APPROVE':'REJECT');
+        await ctx.answerCbQuery(ctx.match[1]==='approve'?'Доступ одобрен':'Заявка отклонена');
+        await ctx.editMessageReplyMarkup({inline_keyboard:[]});
+        await ctx.reply((ctx.match[1]==='approve'?'Одобрен':'Отклонён')+' Telegram ID '+user.telegramChatId);
+        await this.notifyAccess(user.telegramChatId,ctx.match[1]==='approve'?'APPROVE':'REJECT');
+      }catch(error){await ctx.answerCbQuery(this.userError(error));}
     });
     bot.command('menu',ctx=>this.home(ctx));bot.command('help',ctx=>this.help(ctx));bot.command('cancel',ctx=>this.cancel(ctx));
     bot.command('upload',ctx=>this.importHelp(ctx));

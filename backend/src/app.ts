@@ -12,6 +12,7 @@ import { route, AppError, errorHandler } from './lib/errors';
 import { imageFilename } from './lib/files';
 import { screenshotReference } from './modules/clients/client-deletion.service';
 import authRoutes from './modules/auth/auth.routes';
+import accessRoutes from './modules/auth/access.routes';
 import clientsRoutes from './modules/clients/clients.routes';
 import messagesRoutes from './modules/messages/messages.routes';
 import aiRoutes from './modules/ai/ai.routes';
@@ -36,7 +37,8 @@ export function createApp(){
   });
   app.use(express.json({limit:'256kb'}));
   app.get('/api/health',route(async(_req,res)=>{await prisma.$queryRaw`SELECT 1`;res.json({status:'ok',service:'Tanbox CRM'});}));
-  app.use('/api/auth',rateLimit({windowMs:60000,limit:15,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Слишком много попыток входа. Подождите минуту.'}}),authRoutes);
+  app.use('/api/auth',rateLimit({windowMs:60000,limit:process.env.CRM_TEST_DATABASE==='1'?100:15,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Слишком много попыток входа. Подождите минуту.'}}),authRoutes);
+  app.use('/api/access',accessRoutes);
   app.use('/uploads',requireAuth,route(async(req,res)=>{
     const filename=imageFilename('/uploads'+req.path);
     if(!filename)throw new AppError(404,'Изображение не найдено');

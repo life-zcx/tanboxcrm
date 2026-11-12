@@ -1,9 +1,10 @@
 import { prisma } from '../../config/db';
-import { isAllowedTelegramUser } from '../../config/env';
+import { hasAccess, isOwner } from './access.service';
 import { newCode, hashCode } from '../../lib/security';
 import { AppError } from '../../lib/errors';
 export async function issueCode(challengeId: string, userId: string, username?: string) {
-  if (!isAllowedTelegramUser(userId)) throw new AppError(403, 'Доступ не разрешён');
+  const user = await prisma.adminUser.findUnique({ where: { telegramChatId: userId } });
+  if (!isOwner(userId) && (!user || !hasAccess(user))) throw new AppError(403, 'Доступ не разрешён');
   const code = newCode();
   const updated = await prisma.authCode.updateMany({
     where: { id: challengeId, isUsed: false, expiresAt: { gt: new Date() }, code: '', telegramChatId: '' },

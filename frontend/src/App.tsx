@@ -19,6 +19,7 @@ import { WebKnowledge } from './components/WebKnowledge';
 import { SalesPlaybook } from './components/SalesPlaybook';
 import { ClientDetailModal } from './components/ClientDetailModal';
 import { LoginPage } from './components/LoginPage';
+import { AccessUsers } from './components/AccessUsers';
 import { api, ApiError, Client, Deal, AIStatus, AdminUser } from './api';
 
 type Tab = 'kanban' | 'clients' | 'ingest' | 'knowledge';
@@ -491,6 +492,7 @@ export function App() {
               <Route path="/knowledge/documents/:documentId" element={<KnowledgeLibrary />} />
               <Route path="/knowledge/rules" element={<KnowledgeBaseView />} />
               <Route path="/knowledge/playbook" element={<SalesPlaybook />} />
+              {user?.role === 'ADMIN' && <Route path="/access" element={<AccessUsers />} />}
               <Route
                 path="*"
                 element={

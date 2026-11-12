@@ -10,6 +10,7 @@ import {createApp} from '../src/app';
 import {prisma} from '../src/config/db';
 import {env} from '../src/config/env';
 import {issueCode} from '../src/modules/auth/auth.service';
+import {requestAccess,decideAccess} from '../src/modules/auth/access.service';
 import {geminiService} from '../src/ai/gemini.service';
 import {aiOrchestrator} from '../src/ai/ai.orchestrator';
 import {loadPricing} from '../src/pricing/pricing.service';
@@ -76,6 +77,29 @@ test('OTP cannot be guessed indefinitely and unapproved Telegram IDs cannot bind
   for(let i=0;i<5;i++)assert.equal((await call('/api/auth/verify-code',{method:'POST',headers:{Cookie:c.browserCookie},body:JSON.stringify({code:'000000'})})).status,400);
   // Direct DB state verifies persistence even when request limiting takes over.
   assert.equal((await prisma.authCode.findUniqueOrThrow({where:{id:c.id}})).attempts,5);
+});
+test('access approval requires owner, preserves OTP, and revocation ends sessions',async()=>{
+  const applicant='999777123';
+  const response=await call('/api/auth/request-code',{method:'POST',body:'{}'});
+  const {botUrl}=await response.json() as any;
+  const c={id:new URL(botUrl).searchParams.get('start')!.slice(6),browserCookie:cookieFrom(response,'tanbox_challenge')};
+  const request=await requestAccess(applicant,'new-staff');
+  assert.equal(request.status,'PENDING');
+  assert.equal(request.created,true);
+  assert.equal((await requestAccess(applicant,'new-staff')).created,false);
+  await assert.rejects(issueCode(c.id,applicant,'new-staff'));
+  assert.equal((await call('/api/access',{headers:{Cookie:cookie}})).status,200);
+  await assert.rejects(decideAccess(request.user!.id,applicant,'APPROVE'));
+  await decideAccess(request.user!.id,approved,'APPROVE');
+  const code=await issueCode(c.id,applicant,'new-staff');
+  const login=await call('/api/auth/verify-code',{method:'POST',headers:{Cookie:c.browserCookie},body:JSON.stringify({code})});
+  assert.equal(login.status,200);
+  const staffCookie=cookieFrom(login,'tanbox_session');
+  assert.equal((await call('/api/auth/me',{headers:{Cookie:staffCookie}})).status,200);
+  assert.equal((await call('/api/access',{headers:{Cookie:staffCookie}})).status,403);
+  await decideAccess(request.user!.id,approved,'REVOKE');
+  assert.equal((await call('/api/auth/me',{headers:{Cookie:staffCookie}})).status,401);
+  await assert.rejects(issueCode((await challenge()).id,applicant,'new-staff'));
 });
 test('client/deal changes validate inputs and synchronize statuses',async()=>{
   const created=await call('/api/clients',{method:'POST',headers:{Cookie:cookie},body:JSON.stringify({name:'Test client',phone:'+7 707 123 45 67'})});

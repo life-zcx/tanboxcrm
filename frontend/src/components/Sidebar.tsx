@@ -148,6 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Navigation */}
         <nav className="space-y-5" aria-label="Основная навигация">
+          {user?.role === 'ADMIN' && <NavLink to="/access" onClick={() => onCloseMobile?.()} className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[13px] font-medium text-slate-700 hover:bg-slate-100"><ShieldCheck className="w-4 h-4" />{!isCollapsed && 'Доступ к CRM'}</NavLink>}
           {NAV_GROUPS.map((group) => (
             <div key={group.title} className="space-y-1">
               {!isCollapsed && (

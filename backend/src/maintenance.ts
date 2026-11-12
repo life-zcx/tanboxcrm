@@ -39,7 +39,6 @@ export async function maintenance(){
   }
   await prisma.authCode.deleteMany();
   await prisma.authSession.deleteMany();
-  await prisma.adminUser.updateMany({where:{telegramChatId:{notIn:[...env.TELEGRAM_ALLOWED_USER_IDS]}},data:{role:'DISABLED'}});
   console.log(JSON.stringify({normalizedPhones:normalized,createdMissingDeals:deals,quarantinedFiles:quarantined,sessionsRevoked:true}));
 }
 if(require.main===module)maintenance().catch(()=>{console.error('Maintenance failed');process.exitCode=1;}).finally(()=>prisma.$disconnect());
