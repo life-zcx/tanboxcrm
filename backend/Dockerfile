@@ -5,10 +5,10 @@ COPY data/kaz.traineddata /usr/share/tessdata/kaz.traineddata
 COPY package*.json ./
 RUN npm ci
 COPY prisma ./prisma
-COPY tsconfig.json ./
-COPY src ./src
+RUN npx prisma generate
+COPY dist ./dist
 COPY data/*.json data/*.pem ./data/
-RUN npm run build
+RUN npm prune --omit=dev && mkdir -p uploads && chown -R node:node /app
 
 FROM build AS migrator
 USER node
@@ -19,7 +19,7 @@ EXPOSE 5055
 CMD ["npm", "run", "dev"]
 
 FROM build AS production
-RUN npm prune --omit=dev && mkdir -p uploads && chown -R node:node /app
 USER node
 EXPOSE 5055
 CMD ["node", "dist/server.js"]
+
