@@ -1,15 +1,21 @@
 import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
+import './lib/system-logger';
 import { env } from './config/env';
 import { prisma } from './config/db';
 import { createApp } from './app';
 import { telegramBotService } from './bot/telegram.bot';
+import { whatsappService } from './whatsapp/whatsapp.service';
 import { cleanupExpiredScreenshotDrafts } from './bot/screenshot-drafts.service';
 import { flushFileDeletions } from './modules/clients/client-deletion.service';
 import {seedWebRegistry,collectDue} from './knowledge/web.service';
 async function main(){
   await prisma.$connect();
-  const server=createApp().listen(env.PORT,env.HOST,()=>{console.log('TANBOX CRM API ready on port',env.PORT);void telegramBotService.start();});
+  const server=createApp().listen(env.PORT,env.HOST,()=>{
+    console.log('TANBOX CRM API ready on port',env.PORT);
+    void telegramBotService.start();
+    void whatsappService.autoStartIfSaved();
+  });
   server.requestTimeout=70000;
   let stopping=false;
   const cleanup=setInterval(()=>{void prisma.$transaction([
@@ -30,6 +36,7 @@ async function main(){
     if(stopping)return;stopping=true;clearInterval(cleanup);clearInterval(fileCleanup);clearInterval(draftCleanup);if(knowledgeTimer)clearInterval(knowledgeTimer);
     const deadline=setTimeout(()=>process.exit(1),15000);deadline.unref();
     await telegramBotService.stop().catch(()=>{});
+    await whatsappService.stop().catch(()=>{});
     await new Promise<void>(resolve=>server.close(()=>resolve()));
     await prisma.$disconnect();clearTimeout(deadline);
   };

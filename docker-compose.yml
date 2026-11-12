@@ -55,6 +55,7 @@ services:
       - "5055"
     volumes:
       - ./backend/uploads:/app/uploads
+      - ./backend/data/whatsapp-auth:/app/data/whatsapp-auth
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -66,7 +67,9 @@ services:
       start_period: 10s
     stop_grace_period: 20s
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: production
     container_name: tanbox_crm_frontend
     restart: unless-stopped
     ports:

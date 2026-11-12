@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { prisma } from '../../config/db';
 import { route } from '../../lib/errors';
 import { idSchema, text, numberField, dealStages, pagination, stageToStatus } from '../../lib/validation';
-const dealInput = z.object({ stage: z.enum(dealStages).optional(), amount:numberField, codesCount:z.number().int().nonnegative().max(1e9).nullable().optional() }).strict();
+const dealInput = z.object({
+  stage: z.enum(dealStages).optional(),
+  amount: numberField,
+  codesCount: z.number().int().nonnegative().max(1e9).nullable().optional(),
+  lossReason: z.string().trim().max(500).optional(),
+}).strict();
 export const getDeals = route(async (req,res) => {
   const {skip,take}=pagination(req.query);
   const stage = req.query.stage ? z.enum(dealStages).parse(req.query.stage) : undefined;
@@ -23,9 +28,19 @@ export const createDeal = route(async (req,res) => {
 });
 export const updateDealStage = route(async (req,res) => {
   const id=idSchema.parse(req.params.id), data=dealInput.parse(req.body);
+  const {lossReason, ...dealData} = data;
   const deal=await prisma.$transaction(async tx => {
-    const deal=await tx.deal.update({where:{id},data});
-    if (data.stage) await tx.client.update({where:{id:deal.clientId},data:{status:stageToStatus[data.stage]}});
+    const deal=await tx.deal.update({where:{id},data:dealData});
+    if (dealData.stage) {
+      const clientUpdate: Record<string, unknown> = { status: stageToStatus[dealData.stage] };
+      if (dealData.stage === 'CLOSED_LOST' && lossReason) {
+        clientUpdate.aiObjections = lossReason;
+        const currentClient = await tx.client.findUnique({ where: { id: deal.clientId }, select: { notes: true } });
+        const existingNotes = currentClient?.notes ? `${currentClient.notes}\n` : '';
+        clientUpdate.notes = `${existingNotes}[Причина отказа: ${lossReason}]`;
+      }
+      await tx.client.update({where:{id:deal.clientId},data:clientUpdate});
+    }
     return tx.deal.findUniqueOrThrow({where:{id},include:{client:true}});
   });
   res.json({deal});

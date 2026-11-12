@@ -18,6 +18,9 @@ import messagesRoutes from './modules/messages/messages.routes';
 import aiRoutes from './modules/ai/ai.routes';
 import dealsRoutes from './modules/deals/deals.routes';
 import settingsRoutes from './modules/settings/settings.routes';
+import whatsappRoutes from './whatsapp/whatsapp.routes';
+import logsRoutes from './modules/logs/logs.routes';
+import { systemLogger } from './lib/system-logger';
 export function createApp(){
   const app=express();
   app.disable('x-powered-by');
@@ -26,6 +29,31 @@ export function createApp(){
   app.use(cors({origin:env.APP_ORIGIN,credentials:true}));
   app.use(cookieParser());
   app.use('/api',(_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
+
+  // Логирование всех входящих HTTP-запросов к API бэкенда
+  app.use((req, res, next) => {
+    const isLogPoll =
+      req.path === '/api/health' ||
+      req.path === '/api/logs' ||
+      req.path === '/api/whatsapp/logs' ||
+      req.path === '/api/whatsapp/status' ||
+      req.path === '/api/whatsapp/feed';
+    if (isLogPoll) return next();
+
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const status = res.statusCode;
+      const level = status >= 500 ? 'ERROR' : status >= 400 ? 'WARN' : 'INFO';
+      systemLogger.log(
+        'BACKEND',
+        level,
+        `${req.method} ${req.originalUrl || req.url} -> ${status} (${duration}ms)`
+      );
+    });
+    next();
+  });
+
   app.use('/api',rateLimit({windowMs:60000,limit:240,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Слишком много запросов. Повторите позже.'}}));
   app.use('/api',(req,_res,next)=>{
     if(!['GET','HEAD','OPTIONS'].includes(req.method)){
@@ -56,6 +84,8 @@ export function createApp(){
   app.use('/api/messages',requireAuth,messagesRoutes);
   app.use('/api/ai',requireAuth,aiRoutes);
   app.use('/api/settings',requireAuth,settingsRoutes);
+  app.use('/api/whatsapp',requireAuth,whatsappRoutes);
+  app.use('/api/logs',requireAuth,logsRoutes);
   app.use((_req,_res,next)=>next(new AppError(404,'Маршрут не найден')));
   app.use(errorHandler);
   return app;

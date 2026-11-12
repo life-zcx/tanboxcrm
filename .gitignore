@@ -11,4 +11,12 @@ audit-build/
 test-results/
 backend/data/web-captures.ndjson
 backend/data/web-supplement.ndjson
+backend/data/whatsapp-auth/
+data/whatsapp-auth/
 *.log
+
+docker-compose.override.yml
+
+*.tar
+*.tar.gz
+

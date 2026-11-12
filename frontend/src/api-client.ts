@@ -1,8 +1,13 @@
 import type { Client, Deal, AIStatus, AdminUser, ConversationChunk, Message, AISuggestion } from './api';
+import { frontendLogger } from './utils/frontend-logger';
 export interface AccessUser { id:string; telegramChatId:string; telegramUsername:string|null; role:string; accessStatus:string; requestedAt:string|null; approvedAt:string|null; lastLoginAt:string; }
 export class ApiError extends Error {constructor(public status:number,message:string){super(message);}}
 async function request<T>(path:string,options:RequestInit={},timeout=12000):Promise<T>{
   const method=options.method||'GET';
+  const shouldLog = !path.startsWith('/logs') && !path.startsWith('/whatsapp/status') && !path.startsWith('/whatsapp/feed');
+  if (shouldLog) {
+    frontendLogger.info(`[API Запрос] ${method} /api${path}`);
+  }
   const attempts=method==='GET'?2:1;
   for(let attempt=0;attempt<attempts;attempt++){
     const controller=new AbortController();
@@ -15,7 +20,11 @@ async function request<T>(path:string,options:RequestInit={},timeout=12000):Prom
       const data=await response.json().catch(()=>null);
       if(!response.ok){
         if(response.status===401)window.dispatchEvent(new Event('tanbox-unauthorized'));
-        throw new ApiError(response.status,data?.error||'Сервис временно недоступен. Повторите запрос.');
+        const errMsg = data?.error || 'Сервис временно недоступен. Повторите запрос.';
+        if (shouldLog) {
+          frontendLogger.error(`[API Ошибка ${response.status}] ${method} /api${path} -> ${errMsg}`);
+        }
+        throw new ApiError(response.status,errMsg);
       }
       if(data===null)throw new ApiError(502,'Сервер вернул некорректный ответ');
       return data as T;
@@ -45,7 +54,7 @@ export const api={
   deleteClient:(id:string)=>request<{success:boolean;cleanupPending:number}>('/clients/'+encodeURIComponent(id),{method:'DELETE'},30000),
   getDeals:(filters:{stage?:string;offset?:number;limit?:number}={},signal?:AbortSignal)=>request<{deals:Deal[];total:number;amountTotal:number}>('/deals?'+query(filters),{signal}),
   createDeal:(data:{clientId:string;title:string;amount?:number;codesCount?:number;stage?:string})=>request<{deal:Deal}>('/deals',{method:'POST',body:body(data)}),
-  updateDealStage:(id:string,stage:string)=>request<{deal:Deal}>('/deals/'+encodeURIComponent(id)+'/stage',{method:'PUT',body:body({stage})}),
+  updateDealStage:(id:string,stage:string,lossReason?:string)=>request<{deal:Deal}>('/deals/'+encodeURIComponent(id)+'/stage',{method:'PUT',body:body({stage,lossReason:lossReason||undefined})}),
   previewScreenshots:(files:File[],targetClientId?:string)=>{const form=new FormData();files.forEach(f=>form.append('screenshots',f));if(targetClientId)form.append('targetClientId',targetClientId);return request<any>('/messages/preview-screenshot',{method:'POST',body:form},60000);},
   commitScreenshots:(files:File[],reviewToken:string,parsed:unknown,targetClientId?:string)=>{const form=new FormData();files.forEach(f=>form.append('screenshots',f));if(targetClientId)form.append('targetClientId',targetClientId);form.append('reviewToken',reviewToken);form.append('parsed',JSON.stringify(parsed));return request<any>('/messages/commit-screenshot',{method:'POST',body:form},60000);},
   ingestText:(rawText:string,targetClientId?:string)=>request<any>('/messages/ingest-text',{method:'POST',body:body({rawText,targetClientId})},55000),
@@ -69,4 +78,16 @@ export const api={
   createKnowledgeItem:(data:{category:string;title:string;content:string;reviewStatus?:string})=>request<any>('/settings/knowledge',{method:'POST',body:body(data)}),
   getConversations:(clientId:string,offset:number)=>request<{conversations:ConversationChunk[];total:number}>('/messages/client/'+encodeURIComponent(clientId)+'?limit=20&offset='+offset),
   getMessages:(chunkId:string,offset:number)=>request<{messages:Message[];total:number}>('/messages/chunk/'+encodeURIComponent(chunkId)+'/messages?limit=100&offset='+offset),
+  getWhatsAppStatus:(signal?:AbortSignal)=>request<{status:'DISCONNECTED'|'SCAN_QR'|'CONNECTING'|'CONNECTED';qr:string|null;user:{phone?:string;name?:string}|null;error:string|null;syncStats:any;settings:any}>('/whatsapp/status',{signal}),
+  connectWhatsApp:()=>request<{ok:boolean;notice:string}>('/whatsapp/connect',{method:'POST',body:'{}'}),
+  logoutWhatsApp:()=>request<{ok:boolean;notice:string}>('/whatsapp/logout',{method:'POST',body:'{}'}),
+  restartWhatsApp:()=>request<{ok:boolean;notice:string}>('/whatsapp/restart',{method:'POST',body:'{}'}),
+  syncWhatsAppHistory:()=>request<{ok:boolean;notice:string;stats:any}>('/whatsapp/sync',{method:'POST',body:'{}'}),
+  getWhatsAppFeed:(signal?:AbortSignal)=>request<{feed:any[];syncStats:any;settings:any}>('/whatsapp/feed',{signal}),
+  updateWhatsAppSettings:(settings:{autoCreateLeads?:boolean;autoRunAi?:boolean})=>request<{ok:boolean;settings:any}>('/whatsapp/settings',{method:'POST',body:body(settings)}),
+  getWhatsAppLogs:(params?:{limit?:number;filter?:string;level?:string},signal?:AbortSignal)=>request<{logs:any[]}>('/whatsapp/logs?'+query(params||{}),{signal}),
+  clearWhatsAppLogs:()=>request<{ok:boolean;logs:any[]}>('/whatsapp/logs/clear',{method:'POST',body:'{}'}),
+  getLogs:(params?:{limit?:number;category?:string;level?:string;search?:string},signal?:AbortSignal)=>request<{logs:any[]}>('/logs?'+query(params||{}),{signal}),
+  sendFrontendLog:(level:'INFO'|'WARN'|'ERROR',message:string,details?:any)=>request<{ok:boolean}>('/logs/frontend',{method:'POST',body:body({level,message,details})}),
+  clearLogs:()=>request<{ok:boolean;logs:any[]}>('/logs/clear',{method:'POST',body:'{}'}),
 };

@@ -14,6 +14,10 @@ FROM build AS migrator
 USER node
 CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
+FROM build AS dev
+EXPOSE 5055
+CMD ["npm", "run", "dev"]
+
 FROM build AS production
 RUN npm prune --omit=dev && mkdir -p uploads && chown -R node:node /app
 USER node

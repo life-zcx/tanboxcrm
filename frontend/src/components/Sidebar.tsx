@@ -12,12 +12,14 @@ import {
   Send,
   LogOut,
   X,
+  MessageCircle,
+  Terminal,
 } from 'lucide-react';
 import { AdminUser, AIStatus } from '../api';
 
 interface SidebarProps {
   aiStatus: AIStatus | null;
-  currentTab: 'kanban' | 'clients' | 'ingest' | 'knowledge';
+  currentTab: 'kanban' | 'clients' | 'ingest' | 'knowledge' | 'whatsapp' | 'logs';
   user: AdminUser | null;
   onLogout: () => void;
   collapsed?: boolean;
@@ -50,10 +52,17 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
         isActive: (p) => p.startsWith('/clients'),
       },
       {
+        to: '/whatsapp',
+        label: 'WhatsApp онлайн',
+        icon: MessageCircle,
+        badge: 'LIVE',
+        isActive: (p) => p.startsWith('/whatsapp'),
+      },
+      {
         to: '/ingest',
-        label: 'Загрузка переписок',
+        label: 'Загрузка скриншотов',
         icon: UploadCloud,
-        badge: 'WA',
+        badge: 'OCR',
         isActive: (p) => p === '/ingest',
       },
     ],
@@ -85,6 +94,18 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
         label: 'Тарифы и возражения',
         icon: Tag,
         isActive: (p) => p.startsWith('/knowledge/playbook'),
+      },
+    ],
+  },
+  {
+    title: 'Диагностика и система',
+    items: [
+      {
+        to: '/logs',
+        label: 'Логи системы',
+        icon: Terminal,
+        badge: 'LIVE',
+        isActive: (p) => p.startsWith('/logs'),
       },
     ],
   },

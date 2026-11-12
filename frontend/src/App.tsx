@@ -20,9 +20,13 @@ import { SalesPlaybook } from './components/SalesPlaybook';
 import { ClientDetailModal } from './components/ClientDetailModal';
 import { LoginPage } from './components/LoginPage';
 import { AccessUsers } from './components/AccessUsers';
+import { WhatsAppModal } from './components/WhatsAppModal';
+import { WhatsAppSettings } from './components/WhatsAppSettings';
+import { SystemLogs } from './components/SystemLogs';
+import { frontendLogger } from './utils/frontend-logger';
 import { api, ApiError, Client, Deal, AIStatus, AdminUser } from './api';
 
-type Tab = 'kanban' | 'clients' | 'ingest' | 'knowledge';
+type Tab = 'kanban' | 'clients' | 'ingest' | 'knowledge' | 'whatsapp' | 'logs';
 
 export function App() {
   const location = useLocation();
@@ -34,7 +38,11 @@ export function App() {
       ? 'ingest'
       : location.pathname.startsWith('/knowledge')
         ? 'knowledge'
-        : 'kanban';
+        : location.pathname.startsWith('/whatsapp')
+          ? 'whatsapp'
+          : location.pathname.startsWith('/logs')
+            ? 'logs'
+            : 'kanban';
 
   const [user, setUser] = useState<AdminUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -57,6 +65,8 @@ export function App() {
     }
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
+  const [whatsAppStatus, setWhatsAppStatus] = useState<string>('DISCONNECTED');
 
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const filters = useMemo(
@@ -200,9 +210,12 @@ export function App() {
     clients: clientId ? 'Карточка клиента' : 'Реестр клиентов и лидов',
     ingest: 'Загрузка переписки WhatsApp',
     knowledge: knowledgeTitle,
+    whatsapp: 'Интеграция WhatsApp Онлайн',
+    logs: 'Системные логи (Бэкенд / Фронтенд / WhatsApp)',
   };
 
   useEffect(() => {
+    frontendLogger.init();
     document.title =
       (location.pathname === '/login' ? 'Вход' : titles[tab]) + ' — TANBOX CRM';
     window.scrollTo(0, 0);
@@ -306,7 +319,7 @@ export function App() {
           const from = location.state?.from;
           const safe =
             typeof from === 'string' &&
-            /^\/(?:deals|clients|ingest|knowledge)(?:[/?]|$)/.test(from);
+            /^\/(?:deals|clients|ingest|knowledge|whatsapp|logs)(?:[/?]|$)/.test(from);
           navigate(safe ? from : '/deals', { replace: true });
         }}
       />
@@ -338,6 +351,8 @@ export function App() {
           title={titles[tab]}
           aiStatus={status}
           onOpenUpload={() => navigate('/ingest')}
+          onOpenWhatsApp={() => navigate('/whatsapp')}
+          whatsAppStatus={whatsAppStatus}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
@@ -375,7 +390,7 @@ export function App() {
             </div>
           )}
 
-          <div className={tab === 'kanban' ? 'flex-1 min-h-0 flex flex-col' : 'flex-1'}>
+          <div className={tab === 'kanban' || tab === 'whatsapp' || tab === 'logs' ? 'flex-1 min-h-0 flex flex-col' : 'flex-1'}>
             <Routes>
               <Route path="/" element={<Navigate to="/deals" replace />} />
               <Route
@@ -386,11 +401,44 @@ export function App() {
                     counts={counts}
                     totals={totals}
                     onLoadMore={loadMore}
-                    onMoveStage={async (id, stage) => {
+                    onMoveStage={async (id, stage, lossReason) => {
+                      const target = deals.find((d) => d.id === id);
+                      if (!target) return;
+                      const oldStage = target.stage;
+                      if (oldStage === stage) return;
+
+                      const prevDeals = deals;
+                      const prevCounts = counts;
+                      const prevTotals = totals;
+                      const amount = target.amount || 0;
+
+                      // 1. Оптимистичное обновление UI
+                      setDeals((prev) => prev.map((d) => (d.id === id ? { ...d, stage } : d)));
+                      setCounts((prev) => ({
+                        ...prev,
+                        [oldStage]: Math.max(0, (prev[oldStage] ?? 1) - 1),
+                        [stage]: (prev[stage] ?? 0) + 1,
+                      }));
+                      setTotals((prev) => ({
+                        ...prev,
+                        [oldStage]: Math.max(0, (prev[oldStage] ?? amount) - amount),
+                        [stage]: (prev[stage] ?? 0) + amount,
+                      }));
+
+                      // 2. Отправка на сервер и фоновая синхронизация
                       try {
-                        await api.updateDealStage(id, stage);
-                        refresh();
+                        await api.updateDealStage(id, stage, lossReason);
+                        const pages = await Promise.all(
+                          STAGES.map((s) => api.getDeals({ stage: s.id, limit: 25 }))
+                        );
+                        setDeals(pages.flatMap((p) => p.deals));
+                        setCounts(Object.fromEntries(STAGES.map((s, i) => [s.id, pages[i].total])));
+                        setTotals(Object.fromEntries(STAGES.map((s, i) => [s.id, pages[i].amountTotal])));
                       } catch (e) {
+                        // 3. Откат при ошибке
+                        setDeals(prevDeals);
+                        setCounts(prevCounts);
+                        setTotals(prevTotals);
                         fail(e);
                       }
                     }}
@@ -492,6 +540,8 @@ export function App() {
               <Route path="/knowledge/documents/:documentId" element={<KnowledgeLibrary />} />
               <Route path="/knowledge/rules" element={<KnowledgeBaseView />} />
               <Route path="/knowledge/playbook" element={<SalesPlaybook />} />
+              <Route path="/whatsapp" element={<WhatsAppSettings />} />
+              <Route path="/logs" element={<SystemLogs />} />
               {user?.role === 'ADMIN' && <Route path="/access" element={<AccessUsers />} />}
               <Route
                 path="*"
@@ -511,6 +561,12 @@ export function App() {
           </div>
         </main>
       </div>
+
+      <WhatsAppModal
+        isOpen={whatsAppModalOpen}
+        onClose={() => setWhatsAppModalOpen(false)}
+        onStatusChange={setWhatsAppStatus}
+      />
     </div>
   );
 }

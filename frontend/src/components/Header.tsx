@@ -1,12 +1,14 @@
 import React from 'react';
-import { UploadCloud, Send, PanelLeftClose, PanelLeftOpen, Menu } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Menu } from 'lucide-react';
 import { AIStatus } from '../api';
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
-  aiStatus: AIStatus | null;
-  onOpenUpload: () => void;
+  aiStatus?: AIStatus | null;
+  onOpenUpload?: () => void;
+  onOpenWhatsApp?: () => void;
+  whatsAppStatus?: string;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   onOpenMobileMenu?: () => void;
@@ -15,19 +17,10 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   title,
   subtitle,
-  onOpenUpload,
-  aiStatus,
   sidebarCollapsed,
   onToggleSidebar,
   onOpenMobileMenu,
 }) => {
-  const geminiLabel =
-    aiStatus?.providers.gemini.state === 'ready'
-      ? 'готов'
-      : aiStatus?.providers.gemini.state === 'unconfigured'
-        ? 'не настроен'
-        : 'недоступен';
-
   return (
     <header className="bg-white border-b border-slate-200 h-14 px-4 lg:px-6 flex items-center justify-between gap-3 shrink-0 z-20">
       <div className="flex items-center gap-2.5 min-w-0">
@@ -64,45 +57,6 @@ export const Header: React.FC<HeaderProps> = ({
             <p className="text-[11px] text-slate-500 truncate">{subtitle}</p>
           )}
         </div>
-      </div>
-
-      <div className="flex items-center gap-2.5 shrink-0">
-        <span
-          className={`hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium ${
-            aiStatus?.providers.gemini.state === 'ready'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-slate-50 text-slate-600 border-slate-200'
-          }`}
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              aiStatus?.providers.gemini.state === 'ready'
-                ? 'bg-emerald-500'
-                : 'bg-amber-500'
-            }`}
-          />
-          Gemini: {geminiLabel}
-        </span>
-
-        <a
-          href="https://t.me/tanboxcrmbot"
-          target="_blank"
-          rel="noreferrer"
-          className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold hover:border-[#0082FB] hover:text-[#0082FB] transition-colors"
-        >
-          <Send className="w-3.5 h-3.5 text-[#0082FB]" />
-          @tanboxcrmbot
-        </a>
-
-        <button
-          type="button"
-          onClick={onOpenUpload}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0082FB] hover:bg-[#0070D8] text-white text-xs font-semibold transition-colors"
-        >
-          <UploadCloud className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Загрузить переписку</span>
-          <span className="sm:hidden">Загрузить</span>
-        </button>
       </div>
     </header>
   );
