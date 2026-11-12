@@ -10,7 +10,9 @@ body{font-family:system-ui,sans-serif;color:var(--tg-theme-text-color);margin:12
 h3{margin:0 0 5px;font-size:18px}p{margin:0 0 10px;color:var(--tg-theme-hint-color);white-space:pre-wrap}
 #rows{display:flex;flex-direction:column;gap:6px}button,.line{width:100%;box-sizing:border-box;text-align:left;padding:9px 11px;border-radius:9px}
 .line{background:var(--tg-theme-secondary-bg-color)}small{display:block;min-height:1.2em;margin-top:8px;color:var(--tg-theme-hint-color)}
+#close{margin-top:9px;width:100%;padding:8px;border-radius:9px}
 </style></head><body><h3 id="title">TANBOX CRM</h3><p id="subtitle">Загружаю данные…</p><div id="rows"></div><small id="notice"></small>
+<button id="close" onclick="request('w2:close')">✖️ Закрыть</button>
 <script>
 var TW=window.TelegramWidget;
 function el(id){return document.getElementById(id)}

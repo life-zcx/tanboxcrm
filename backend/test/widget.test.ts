@@ -10,6 +10,7 @@ test('dashboard widget fits Telegram limits and cannot inject script through its
   assert.ok(deflateSync(html,{level:9}).length<=4096);
   assert.ok(!html.includes('</script><script>alert(1)</script>'));
   assert.match(html,/TW\.copyText\(row\.copy\)/);
+  assert.match(html,/request\('w2:close'\)/);
 });
 
 test('client details are escaped in legacy widget messages',()=>{

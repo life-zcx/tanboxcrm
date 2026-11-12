@@ -64,10 +64,17 @@ export class TelegramBotService {
     if(old&&(old.busy||Date.now()-old.updated<30*60_000)){old.updated=Date.now();return old;}
     const value:UserState={updated:Date.now()};this.users.set(key,value);return value;
   }
-  private keyboard(){return Markup.keyboard([[BOT_LABELS.upload,BOT_LABELS.clients],[BOT_LABELS.reply,BOT_LABELS.pipeline],[BOT_LABELS.knowledge,BOT_LABELS.login],[BOT_LABELS.help]]).resize().persistent();}
   private async reply(ctx:Context,text:string,extra:Record<string,unknown>={}){
     const pieces=text.match(/[\s\S]{1,3500}/g)||[''];
-    for(let i=0;i<pieces.length;i++)await ctx.reply(pieces[i],i===pieces.length-1?{...this.keyboard(),...extra}:{});
+    const close:InlineKeyboardButton={text:'✖️ Закрыть',callback_data:'close'};
+    for(let i=0;i<pieces.length;i++){
+      const last=i===pieces.length-1,markup=last?extra.reply_markup as {inline_keyboard?:InlineKeyboardButton[][]}|undefined:undefined;
+      const buttons=markup?.inline_keyboard;
+      const withClose=buttons?{...extra,reply_markup:{...markup,inline_keyboard:[...buttons,[close]]}}:
+        pieces[i].length>=300||!last?{...extra,reply_markup:{inline_keyboard:[[close]]}}:
+        {...Markup.removeKeyboard(),...extra};
+      await ctx.reply(pieces[i],withClose);
+    }
   }
   private userError(error:unknown){return error instanceof AppError?error.message:'Не удалось выполнить действие. Попробуйте ещё раз.';}
   private webLink(path:string){
@@ -122,7 +129,7 @@ export class TelegramBotService {
     if(ctx.chat?.type!=='private')return;
     await (this.bot!.telegram as any).callApi('sendWidget',{
       chat_id:ctx.chat.id,html:dashboardWidgetHtml(screen),allow_queries:true,
-      caption:'TANBOX CRM · интерактивное меню',reply_markup:this.keyboard().reply_markup,
+      caption:'TANBOX CRM · интерактивное меню',reply_markup:Markup.removeKeyboard().reply_markup,
     });
   }
   private async handleDashboardQuery(query:any,answer:(data:DashboardReply|{ok:true;notice:string})=>Promise<void>){
@@ -132,6 +139,11 @@ export class TelegramBotService {
     const page=(raw:string|undefined)=>Math.min(1000,Math.max(0,Number.parseInt(raw||'0',10)||0));
     const fakeCtx={chat:query.chat,from:query.from,reply:(text:string,extra:any)=>this.bot!.telegram.sendMessage(query.chat.id,text,extra)} as unknown as Context;
     const later=(task:Promise<unknown>)=>{void task.catch(error=>console.error('Widget action failed:',this.safeError(error)));};
+    if(action==='close'){
+      await answer({ok:true,notice:'Закрыто'});
+      await this.bot!.telegram.deleteMessage(query.chat.id,query.message_id).catch(()=>{});
+      return;
+    }
     if(action==='home'){
       await answer({ok:true,title:'TANBOX CRM',subtitle:'Клиенты и переписки прямо в Telegram',rows:[
         row('👥 Клиенты','w2:clients:0'),row('📊 Воронка сделок','w2:pipeline'),row('📚 База знаний','w2:knowledge:0'),
@@ -411,6 +423,11 @@ export class TelegramBotService {
       if(!isImage&&now-(this.userRequests.get(id)||0)<350){if(ctx.callbackQuery)await ctx.answerCbQuery('Подождите немного');return;}
       if(!isImage)this.userRequests.set(id,now);await next();
     });
+    bot.use(async(ctx,next)=>{
+      if(ctx.message&&'text' in ctx.message&&Object.values(BOT_LABELS).includes(ctx.message.text as any))
+        await ctx.reply('Нижние кнопки убраны. Откройте интерактивное меню в сообщении бота.',Markup.removeKeyboard());
+      await next();
+    });
     bot.command('start',async ctx=>{
       const payload=ctx.message.text.split(/\s+/)[1]||'';
       if(payload.startsWith('login_')){
@@ -509,6 +526,7 @@ export class TelegramBotService {
       try{await this.sendDashboardWidget(ctx,'card:'+idSchema.parse(ctx.match[1]));}
       catch(error){console.error('Widget send failed:',this.safeError(error));await this.reply(ctx,'Не удалось открыть интерактивную карточку. Обычная карточка доступна выше.');}
     });
+    bot.action('close',async ctx=>{await ctx.answerCbQuery();await ctx.deleteMessage().catch(()=>ctx.editMessageReplyMarkup({inline_keyboard:[]}).catch(()=>{}));});
     bot.action(/^(dossier|pickreply|pickattach|question|history|status|price):(.+)$/,async ctx=>{
       await ctx.answerCbQuery();const action=ctx.match[1],id=idSchema.parse(ctx.match[2]),s=this.session(ctx);
       if(action==='dossier'){await this.card(ctx,id);return;}
