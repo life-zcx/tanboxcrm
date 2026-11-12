@@ -70,19 +70,31 @@ export const finishTelegramLogin = route(async (req: Request, res: Response) => 
       }),
       signal: AbortSignal.timeout(8000),
     });
-    if (!tokenResponse.ok) return failure('failed');
+    if (!tokenResponse.ok) {
+      console.error('Telegram OIDC token endpoint rejected exchange:', tokenResponse.status);
+      return failure('failed');
+    }
     const tokens = await tokenResponse.json() as { id_token?: unknown };
-    if (typeof tokens.id_token !== 'string') return failure('failed');
+    if (typeof tokens.id_token !== 'string') {
+      console.error('Telegram OIDC response has no ID token');
+      return failure('failed');
+    }
     const { payload } = await jwtVerify(tokens.id_token, jwks, {
       issuer, audience: env.TELEGRAM_LOGIN_CLIENT_ID, algorithms: ['RS256'], clockTolerance: 30,
     });
+    const idClaim = payload.id;
+    const idText = typeof idClaim === 'string' ? idClaim : typeof idClaim === 'number' ? String(idClaim) : '';
     if (typeof payload.iat !== 'number' || payload.iat > Date.now() / 1000 + 30 ||
-        typeof payload.id !== 'number' || !Number.isSafeInteger(payload.id) || payload.id <= 0)
+        !/^[1-9]\d{0,15}$/.test(idText) || !Number.isSafeInteger(Number(idText))) {
+      console.error('Telegram OIDC ID token missing valid identity claims', {
+        issuedAt: typeof payload.iat, id: typeof payload.id, subject: typeof payload.sub,
+      });
       return failure('failed');
-    telegramId = String(payload.id);
+    }
+    telegramId = idText;
     username = typeof payload.preferred_username === 'string' ? payload.preferred_username.slice(0, 64) : undefined;
   } catch (error) {
-    console.error('Telegram OIDC exchange failed', error instanceof Error ? error.name : 'unknown');
+    console.error('Telegram OIDC exchange failed', error instanceof Error ? error.name + ': ' + error.message.slice(0, 180) : 'unknown');
     return failure('failed');
   }
 
