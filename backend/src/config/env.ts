@@ -12,6 +12,8 @@ export const env = {
   PORT: Number(process.env.PORT || 5055), HOST: process.env.HOST || '127.0.0.1',
   DATABASE_URL: databaseUrl, TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
   TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME || 'tanboxcrmbot',
+  TELEGRAM_LOGIN_CLIENT_ID: process.env.TELEGRAM_LOGIN_CLIENT_ID || '',
+  TELEGRAM_LOGIN_CLIENT_SECRET: process.env.TELEGRAM_LOGIN_CLIENT_SECRET || '',
   TELEGRAM_ALLOWED_USER_IDS: new Set(allowedIds), TELEGRAM_POLLING: process.env.TELEGRAM_POLLING !== 'false',
   GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY || '',
   GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',

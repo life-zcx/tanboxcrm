@@ -49,9 +49,18 @@ export class TelegramBotService {
     }
   }
   isAvailable(){return this.running;}
+  async notifyAccessRequest(userId:string,telegramId:string,username?:string){
+    if(!this.bot)return;
+    for(const ownerId of env.TELEGRAM_ALLOWED_USER_IDS){
+      try{await this.bot.telegram.sendMessage(ownerId,
+        'Заявка на доступ к TANBOX CRM\n@'+(username||'нет username')+'\nTelegram ID: '+telegramId,
+        {reply_markup:{inline_keyboard:[[Markup.button.callback('Одобрить','access:approve:'+userId),Markup.button.callback('Отклонить','access:reject:'+userId)]]}});
+      }catch(error){console.error('Access notification failed',this.safeError(error));}
+    }
+  }
   async notifyAccess(telegramChatId:string,action:'APPROVE'|'REJECT'|'REVOKE'){
     if(!this.bot)return;
-    const message=action==='APPROVE'?'Доступ к TANBOX CRM одобрен. Откройте сайт CRM и запросите новый код входа.':action==='REJECT'?'Заявка на доступ к TANBOX CRM отклонена.':'Доступ к TANBOX CRM отозван владельцем.';
+    const message=action==='APPROVE'?'Доступ к TANBOX CRM одобрен. Откройте сайт CRM и нажмите «Войти через Telegram».':action==='REJECT'?'Заявка на доступ к TANBOX CRM отклонена.':'Доступ к TANBOX CRM отозван владельцем.';
     try{await this.bot.telegram.sendMessage(telegramChatId,message);}catch(error){console.error('Access decision notification failed',this.safeError(error));}
   }
   getStatus(){return {configured:!!this.bot,running:this.running,state:this.state,name:env.TELEGRAM_BOT_USERNAME};}

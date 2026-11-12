@@ -71,6 +71,26 @@ test('approved browser login, OTP race, rejected masters and revoked sessions',a
   const forged=jwt.sign({sub:randomUUID(),jti:randomUUID()},env.JWT_SECRET,{issuer:'tanbox-crm',audience:'tanbox-web'});
   assert.equal((await call('/api/clients',{headers:{Cookie:'tanbox_session='+forged}})).status,401);
 });
+test('Telegram OIDC start uses PKCE and rejects a callback without matching browser state',async()=>{
+  const clientId=env.TELEGRAM_LOGIN_CLIENT_ID,secret=env.TELEGRAM_LOGIN_CLIENT_SECRET;
+  env.TELEGRAM_LOGIN_CLIENT_ID='123456789';env.TELEGRAM_LOGIN_CLIENT_SECRET='test-only-secret';
+  try{
+    const start=await call('/api/auth/telegram/start',{redirect:'manual'});
+    assert.equal(start.status,302);
+    const url=new URL(start.headers.get('location')!);
+    assert.equal(url.origin,'https://oauth.telegram.org');
+    assert.equal(url.searchParams.get('client_id'),'123456789');
+    assert.equal(url.searchParams.get('redirect_uri'),env.APP_ORIGIN+'/api/auth/telegram/callback');
+    assert.equal(url.searchParams.get('code_challenge_method'),'S256');
+    assert(url.searchParams.get('code_challenge'));
+    const flowCookie=cookieFrom(start,'tanbox_oidc');
+    assert(start.headers.getSetCookie().some(c=>c.startsWith('tanbox_oidc=')&&c.includes('HttpOnly')&&c.includes('SameSite=Lax')));
+    const callback=await call('/api/auth/telegram/callback?state=wrong&code=forged',{redirect:'manual',headers:{Cookie:flowCookie}});
+    assert.equal(callback.status,303);
+    assert.equal(callback.headers.get('location'),'/login?telegram=expired');
+    assert(!callback.headers.getSetCookie().some(c=>c.startsWith('tanbox_session=ey')));
+  }finally{env.TELEGRAM_LOGIN_CLIENT_ID=clientId;env.TELEGRAM_LOGIN_CLIENT_SECRET=secret;}
+});
 test('OTP cannot be guessed indefinitely and unapproved Telegram IDs cannot bind it',async()=>{
   const c=await challenge();
   await assert.rejects(issueCode(c.id,'999999','stranger'));
@@ -430,8 +450,8 @@ test('Telegram access is checked before handlers and simultaneous images are ret
 });
 test('Telegram menu retains client import, AI replies, status changes and knowledge',async()=>{
   const originalTransport=Telegram.prototype.callApi,originalParse=geminiService.parseTextDialogue,originalSuggest=aiOrchestrator.generateSuggestedReply;
-  const messages:any[]=[];let suggestedFor='';
-  Telegram.prototype.callApi=async function(method,payload:any){if(method==='sendMessage')messages.push(payload);return {message_id:1} as any;};
+  const messages:any[]=[],widgets:any[]=[];let suggestedFor='';
+  Telegram.prototype.callApi=async function(method,payload:any){if(method==='sendMessage')messages.push(payload);if(method==='sendWidget')widgets.push(payload);return {message_id:1} as any;};
   geminiService.parseTextDialogue=async()=>({clientName:'Bot workflow client',category:'SHOES',sentiment:'NEUTRAL',summary:'Need 100 codes',nextStep:'Ask date',messages:[{sender:'CLIENT',content:'Need 100 codes'}]});
   aiOrchestrator.generateSuggestedReply=async options=>{suggestedFor=options.clientId;return {suggestionId:'test',reply:'Test reply',explanation:'Test explanation',variations:[],provider:'GEMINI'};};
   const service=new TelegramBotService() as any;service.bot.botInfo={id:123456789,is_bot:true,first_name:'Test',username:'test_bot'};
@@ -440,8 +460,7 @@ test('Telegram menu retains client import, AI replies, status changes and knowle
   const action=async(data:string)=>{service.userRequests.clear();await service.bot.handleUpdate({update_id:++update,callback_query:{id:String(update),from:{id:Number(approved),is_bot:false,first_name:'Owner'},chat_instance:'test',data,message:{message_id:1,date:0,chat:{id:Number(approved),type:'private'},text:'Menu'}}});};
   try{
     await text('/start');
-    assert(messages.at(-1).reply_markup.keyboard.flat().some((b:any)=>b===BOT_LABELS.upload||b.text===BOT_LABELS.upload));
-    await text(BOT_LABELS.upload);await text('Client: Need 100 codes');
+    await text('/upload');await text('Client: Need 100 codes');
     const client=await prisma.client.findFirstOrThrow({where:{name:'Bot workflow client'}});
     assert.equal(await prisma.deal.count({where:{clientId:client.id}}),1);
     assert(messages.at(-1).text.includes('Клиент: Bot workflow client'));
@@ -454,8 +473,8 @@ test('Telegram menu retains client import, AI replies, status changes and knowle
     assert(messages.at(-1).reply_markup.inline_keyboard.flat().some((b:any)=>b.text==='Удалить полностью'));
     await action('deleteclient:'+client.id);assert.equal(await prisma.client.count({where:{id:client.id}}),0);
     assert(messages.at(-1).text.includes('скриншоты удалены'));
-    await text(BOT_LABELS.knowledge);assert(messages.at(-1).text.includes('База знаний'));
-    await text(BOT_LABELS.pipeline);assert(messages.at(-1).text.includes('Воронка сделок'));
+    await text('/knowledge');assert(widgets.at(-1).html.includes('knowledge:0'));
+    await text('/pipeline');assert(widgets.at(-1).html.includes('pipeline'));
   }finally{Telegram.prototype.callApi=originalTransport;geminiService.parseTextDialogue=originalParse;aiOrchestrator.generateSuggestedReply=originalSuggest;}
 });
 test('Telegram album download order follows message IDs rather than handler arrival order',async()=>{

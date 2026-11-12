@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Send, ShieldCheck, Lock, ExternalLink } from 'lucide-react';
 import { api, AdminUser } from '../api';
 
@@ -9,7 +9,21 @@ export const LoginPage: React.FC<{ onLoginSuccess: (user: AdminUser) => void }> 
   const [botUrl, setBotUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [telegramLoginEnabled, setTelegramLoginEnabled] = useState(false);
   const inFlight = useRef(false);
+
+  useEffect(() => {
+    fetch('/api/auth/telegram/config', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => setTelegramLoginEnabled(Boolean(data?.enabled)))
+      .catch(() => {});
+    const result = new URLSearchParams(window.location.search).get('telegram');
+    if (result === 'pending') setError('Заявка отправлена владельцу CRM. После одобрения нажмите «Войти через Telegram» ещё раз.');
+    else if (result === 'denied') setError('Доступ отклонён или отозван. Повторный запрос доступен через 24 часа.');
+    else if (result === 'expired') setError('Время входа истекло. Попробуйте снова.');
+    else if (result === 'failed') setError('Telegram не подтвердил вход. Попробуйте снова.');
+    else if (result === 'unavailable') setError('Вход через Telegram временно недоступен.');
+  }, []);
 
   const request = async () => {
     if (inFlight.current) return;
@@ -52,6 +66,13 @@ export const LoginPage: React.FC<{ onLoginSuccess: (user: AdminUser) => void }> 
           <h1 className="text-lg font-bold text-slate-900">Вход в систему управления</h1>
           <p className="text-xs text-slate-500">Одноразовый код авторизации через Telegram</p>
         </div>
+
+        {telegramLoginEnabled && (
+          <button type="button" onClick={() => window.location.assign('/api/auth/telegram/start')}
+            className="w-full bg-[#0082FB] hover:bg-[#0070D8] text-white px-4 py-3 rounded-lg font-semibold transition-colors">
+            Войти через Telegram
+          </button>
+        )}
 
         <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 space-y-3 text-xs text-slate-700 leading-relaxed">
           <p>
