@@ -17,7 +17,8 @@ import {deleteClientCompletely} from '../modules/clients/client-deletion.service
 import {activeArchive,archiveDocument,splitPassages} from '../knowledge/archive.service';
 import {webOverview,usableFacts} from '../knowledge/web.service';
 import {quoteForReply,quoteText} from '../pricing/pricing.service';
-import {clientWidgetHtml,widgetStatusLabels} from './client-widget';
+import {widgetStatusLabels} from './client-widget';
+import {dashboardWidgetHtml,DashboardReply,DashboardRow} from './dashboard-widget';
 export const BOT_LABELS={upload:'📸 Загрузить переписку',clients:'👥 Клиенты',reply:'💡 Что ответить',pipeline:'📊 Воронка',knowledge:'📚 База знаний',login:'🔐 Вход в веб',help:'❓ Помощь'} as const;
 const labels:Record<string,string>={LEAD:'Новый лид',IN_NEGOTIATION:'В переговорах',KP_SENT:'КП отправлено',PAYMENT_PENDING:'Ожидает оплаты',IN_PROGRESS:'В работе',WON:'Оплачено',LOST:'Отказ'};
 const stageLabels:Record<string,string>={NEW:'Новые лиды',QUALIFIED:'В переговорах',OFFER_SENT:'КП отправлено',INVOICED:'Ожидают оплаты',PAID:'Оплачено',CLOSED_LOST:'Отказы'};
@@ -76,6 +77,7 @@ export class TelegramBotService {
   }
   private async home(ctx:Context){
     const s=this.session(ctx);s.mode=undefined;s.pendingText=undefined;s.targetClientId=undefined;
+    try{await this.sendDashboardWidget(ctx,'home');return;}catch(error){console.warn('Dashboard widget unavailable:',this.safeError(error));}
     await this.reply(ctx,'TANBOX CRM — клиенты и переговоры\n\n📸 Отправьте скриншоты WhatsApp: сначала покажу распознанный черновик, затем вы подтвердите сохранение. Текст переписки тоже можно отправить в бот.\n💡 Помогу подготовить ответ с учётом истории и тарифов.\n👥 В карточке клиента доступны досье, статусы и добавление переписки.\n\nВыберите действие в меню ниже. Вход по коду нужен только для веб-панели.');
   }
   private async help(ctx:Context){
@@ -116,18 +118,137 @@ export class TelegramBotService {
     rows.push([Markup.button.callback('← Клиенты','clients:0'),Markup.button.callback('Главное меню','home')]);
     await this.reply(ctx,'👤 '+client.name+'\n🏢 '+(client.company||'Компания не указана')+'\n📞 '+(client.phone||'Нет телефона')+'\nБИН/ИИН: '+(client.binIin||'—')+'\nОбъём: '+(client.estimatedVolume??'не указан')+'\nСтатус: '+(labels[client.status]||client.status)+'\n\nСитуация: '+(client.aiSummary||'Нет сводки').slice(0,1200)+'\n\nСледующий шаг: '+(client.aiNextStep||'Уточнить задачу').slice(0,800)+'\n\nПереписок: '+client._count.conversations+' · Сделок: '+client._count.deals,{...Markup.inlineKeyboard(rows)});
   }
-  private async sendClientWidget(ctx:Context,id:string){
+  private async sendDashboardWidget(ctx:Context,screen:string){
     if(ctx.chat?.type!=='private')return;
-    const client=await prisma.client.findUnique({where:{id},select:{id:true,name:true,company:true,status:true,aiNextStep:true}});
-    if(!client)throw new AppError(404,'Клиент не найден');
     await (this.bot!.telegram as any).callApi('sendWidget',{
-      chat_id:ctx.chat.id,html:clientWidgetHtml(client),allow_queries:true,
-      caption:'Карточка клиента · TANBOX CRM',
+      chat_id:ctx.chat.id,html:dashboardWidgetHtml(screen),allow_queries:true,
+      caption:'TANBOX CRM · интерактивное меню',reply_markup:this.keyboard().reply_markup,
     });
+  }
+  private async handleDashboardQuery(query:any,answer:(data:DashboardReply|{ok:true;notice:string})=>Promise<void>){
+    const parts=String(query.data).split(':');
+    const action=parts[1],id=parts[2];
+    const row=(text:string,action?:string,url?:string,copy?:string):DashboardRow=>({text,action,url,copy});
+    const page=(raw:string|undefined)=>Math.min(1000,Math.max(0,Number.parseInt(raw||'0',10)||0));
+    const fakeCtx={chat:query.chat,from:query.from,reply:(text:string,extra:any)=>this.bot!.telegram.sendMessage(query.chat.id,text,extra)} as unknown as Context;
+    const later=(task:Promise<unknown>)=>{void task.catch(error=>console.error('Widget action failed:',this.safeError(error)));};
+    if(action==='home'){
+      await answer({ok:true,title:'TANBOX CRM',subtitle:'Клиенты и переписки прямо в Telegram',rows:[
+        row('👥 Клиенты','w2:clients:0'),row('📊 Воронка сделок','w2:pipeline'),row('📚 База знаний','w2:knowledge:0'),
+        row('📸 Загрузить переписку','w2:upload'),row('📋 Проверить черновик','w2:review'),
+        row('🔐 Вход в веб-панель','w2:login'),row('❓ Помощь','w2:help'),
+      ]});return;
+    }
+    if(action==='clients'){
+      const offset=page(id)*4;
+      const [clients,total]=await prisma.$transaction([
+        prisma.client.findMany({skip:offset,take:4,orderBy:[{lastContactAt:'desc'},{id:'asc'}],select:{id:true,name:true,status:true}}),
+        prisma.client.count(),
+      ]);
+      await answer({ok:true,title:'👥 Клиенты',subtitle:`${total?offset+1:0}–${Math.min(total,offset+4)} из ${total}`,rows:[
+        ...clients.map(client=>row(client.name.slice(0,20)+' · '+(widgetStatusLabels[client.status as keyof typeof widgetStatusLabels]||client.status),'w2:card:'+client.id)),
+        ...(offset>0?[row('← Назад','w2:clients:'+(page(id)-1))]:[]),
+        ...(offset+4<total?[row('Далее →','w2:clients:'+(page(id)+1))]:[]),
+        row('🔎 Найти клиента','w2:search'),row('⌂ Главное меню','w2:home'),
+      ]});return;
+    }
+    if(action==='pipeline'){
+      const groups=await prisma.deal.groupBy({by:['stage'],orderBy:{stage:'asc'},_count:true,_sum:{amount:true}});
+      await answer({ok:true,title:'📊 Воронка сделок',subtitle:'Количество и сумма по этапам',rows:[
+        ...Object.entries(stageLabels).map(([stage,label])=>{const group=groups.find(item=>item.stage===stage);return row(`${label}: ${group?group._count:0} · ${(group?group._sum.amount||0:0).toLocaleString('ru-RU')} ₸`)}),
+        row('👥 Открыть клиентов','w2:clients:0'),row('⌂ Главное меню','w2:home'),
+      ]});return;
+    }
+    if(action==='card'||action==='more'||action==='statuses'||action==='styles'||action==='set'){
+      const clientId=idSchema.parse(id);
+      if(action==='set'){
+        const status=z.enum(clientStatuses).parse(parts[3]);
+        await prisma.$transaction(async tx=>{await tx.client.update({where:{id:clientId},data:{status}});const deal=await tx.deal.findFirst({where:{clientId:clientId},orderBy:{updatedAt:'desc'}});if(deal)await tx.deal.update({where:{id:deal.id},data:{stage:statusToStage[status]}});});
+      }
+      const client=await prisma.client.findUnique({where:{id:clientId},select:{id:true,name:true,company:true,phone:true,status:true,aiNextStep:true}});
+      if(!client){await answer({ok:false,error:'Клиент не найден'});return;}
+      if(action==='statuses'){
+        await answer({ok:true,title:'Статус · '+client.name.slice(0,40),rows:[...clientStatuses.map(status=>row((status===client.status?'✓ ':'')+widgetStatusLabels[status],'w2:set:'+clientId+':'+status)),row('← Карточка','w2:card:'+clientId)]});return;
+      }
+      if(action==='styles'){
+        await answer({ok:true,title:'Ответ клиенту · '+client.name.slice(0,35),subtitle:'Выберите стиль. Ответ придёт сообщением.',rows:[
+          row('Деловой','w2:reply:'+clientId+':BUSINESS'),row('Дружелюбный','w2:reply:'+clientId+':FRIENDLY'),
+          row('Дожим','w2:reply:'+clientId+':CLOSING'),row('Эксперт','w2:reply:'+clientId+':EXPERT'),
+          row('✍️ Свой вопрос','w2:question:'+clientId),row('← Карточка','w2:card:'+clientId),
+        ]});return;
+      }
+      if(action==='more'){
+        await answer({ok:true,title:'Действия · '+client.name.slice(0,35),rows:[
+          row('🕘 Последняя переписка','w2:history:'+clientId),row('💰 Расчёт стоимости','w2:price:'+clientId),
+          ...(client.phone?[row('📋 Скопировать телефон',undefined,undefined,client.phone)]:[]),
+          row('🌐 Открыть в CRM',undefined,env.APP_ORIGIN+'/clients/'+clientId),row('← Карточка','w2:card:'+clientId),
+        ]});return;
+      }
+      await answer({ok:true,title:'👤 '+client.name.slice(0,40),subtitle:(client.company||'Компания не указана').slice(0,50)+'\n'+widgetStatusLabels[client.status as keyof typeof widgetStatusLabels]+' · '+(client.aiNextStep||'Уточнить задачу').slice(0,55),rows:[
+        row('📊 Изменить статус','w2:statuses:'+clientId),row('💡 Подготовить ответ','w2:styles:'+clientId),
+        row('📎 Добавить переписку','w2:attach:'+clientId),row('⋯ Другие действия','w2:more:'+clientId),
+        row('← Клиенты','w2:clients:0'),
+      ]});return;
+    }
+    if(action==='knowledge'){
+      const archive=await activeArchive();
+      if(!archive){await answer({ok:true,title:'📚 База знаний',rows:[row('💰 Тарифы TANBOX','w2:tariffs'),row('🌐 Интернет-база','w2:webkb:0'),row('⌂ Главное меню','w2:home')]});return;}
+      const categories=(archive.manifest as any).categories as {code:string;title:string}[],offset=page(id)*5;
+      await answer({ok:true,title:'📚 База знаний',subtitle:`Категории ${offset+1}–${Math.min(categories.length,offset+5)} из ${categories.length}`,rows:[
+        ...categories.slice(offset,offset+5).map(item=>row(item.title.slice(0,28),'w2:docs:'+item.code+':0')),
+        ...(offset>0?[row('← Назад','w2:knowledge:'+(page(id)-1))]:[]),
+        ...(offset+5<categories.length?[row('Далее →','w2:knowledge:'+(page(id)+1))]:[]),
+        row('🌐 Интернет-база','w2:webkb:0'),row('💰 Тарифы','w2:tariffs'),row('⌂ Главное меню','w2:home'),
+      ]});return;
+    }
+    if(action==='docs'){
+      const archive=await activeArchive();if(!archive){await answer({ok:false,error:'Архив недоступен'});return;}
+      const category=id,valid=category==='GENERAL'||((archive.manifest as any).categories as {code:string}[]).some(item=>item.code===category);
+      if(!valid){await answer({ok:false,error:'Категория не найдена'});return;}
+      const current=page(parts[3]),where={importId:archive.id,language:{in:['ru','mixed']},categoryCodes:{has:category}};
+      const [docs,total]=await prisma.$transaction([
+        prisma.knowledgeDocument.findMany({where,skip:current*4,take:4,orderBy:[{kind:'asc'},{title:'asc'},{id:'asc'}],select:{id:true,title:true}}),
+        prisma.knowledgeDocument.count({where}),
+      ]);
+      await answer({ok:true,title:'📚 Материалы',subtitle:`Страница ${current+1} · документов ${total}`,rows:[
+        ...docs.map(doc=>row(doc.title.slice(0,30),'w2:doc:'+doc.id)),
+        ...(current>0?[row('← Назад','w2:docs:'+category+':'+(current-1))]:[]),
+        ...(current*4+4<total?[row('Далее →','w2:docs:'+category+':'+(current+1))]:[]),
+        row('← Категории','w2:knowledge:0'),
+      ]});return;
+    }
+    if(action==='webkb'){
+      const overview=await webOverview(),current=page(id),categories=overview.categories.slice(current*5,current*5+5);
+      await answer({ok:true,title:'🌐 Интернет-база',subtitle:`Источников ${overview.stats.sources} · проверенных правил ${overview.stats.publishedFacts}`,rows:[
+        ...categories.map(item=>row(item.title.slice(0,28),'w2:webcat:'+item.code)),
+        ...(current>0?[row('← Назад','w2:webkb:'+(current-1))]:[]),
+        ...(current*5+5<overview.categories.length?[row('Далее →','w2:webkb:'+(current+1))]:[]),
+        row('← База знаний','w2:knowledge:0'),
+      ]});return;
+    }
+    if(action==='upload'||action==='review'||action==='login'||action==='help'||action==='search'||action==='tariffs'||action==='doc'||action==='webcat'||action==='reply'||action==='question'||action==='attach'||action==='history'||action==='price'){
+      await answer({ok:true,notice:'Откройте новое сообщение бота ниже.'});
+      if(action==='upload')later(this.importHelp(fakeCtx));
+      if(action==='review')later((async()=>{const draft=await prisma.screenshotDraft.findFirst({where:{telegramUserId:String(query.from.id),expiresAt:{gt:new Date()}},orderBy:{createdAt:'desc'},select:{id:true}});if(draft)await this.showScreenshotDraft(fakeCtx,draft.id);else await this.reply(fakeCtx,'Нет переписки, ожидающей проверки. Отправьте скриншоты через «Загрузить переписку».');})());
+      if(action==='login')later(this.login(fakeCtx));
+      if(action==='help')later(this.help(fakeCtx));
+      if(action==='search'){const session=this.session(fakeCtx);session.mode='search';later(this.reply(fakeCtx,'Введите имя, телефон, БИН или компанию для поиска. /cancel — отмена.'));}
+      if(action==='tariffs')later(this.reply(fakeCtx,'💰 Тарифы TANBOX\n\n'+Object.values(TANBOX_KNOWLEDGE.tariffs).join('\n\n')));
+      if(action==='doc')later(this.libraryDocument(fakeCtx,idSchema.parse(id),0));
+      if(action==='webcat')later(this.webCategory(fakeCtx,id,0));
+      if(action==='reply')later(this.generate(fakeCtx,idSchema.parse(id),z.enum(['BUSINESS','FRIENDLY','CLOSING','EXPERT']).parse(parts[3])));
+      if(action==='question'){const session=this.session(fakeCtx);session.activeClientId=idSchema.parse(id);session.mode='question';later(this.reply(fakeCtx,'Напишите, что нужно подготовить для клиента. Например: «Уточни сроки и запроси реквизиты». /cancel — отмена.'));}
+      if(action==='attach')later(this.importHelp(fakeCtx,idSchema.parse(id)));
+      if(action==='history')later((async()=>{const clientId=idSchema.parse(id),chunk=await prisma.conversationChunk.findFirst({where:{clientId},orderBy:{createdAt:'desc'},include:{messages:{orderBy:[{position:'desc'},{id:'desc'}],take:20}}});await this.reply(fakeCtx,chunk?'🕘 Последняя переписка\n\n'+chunk.messages.reverse().map(message=>(message.sender==='CLIENT'?'Клиент: ':'Менеджер: ')+message.content).join('\n\n'):'Переписок пока нет.');})());
+      if(action==='price')later((async()=>{const clientId=idSchema.parse(id),result=await quoteForReply(clientId);await this.reply(fakeCtx,result.evidence?quoteText(result.evidence.calculation):'Расчёт стоимости пока не подготовлен. Откройте карточку клиента в CRM.');})());
+      return;
+    }
+    await answer({ok:false,error:'Неизвестное действие'});
   }
   private async handleWidgetQuery(query:any){
     const answer=async(data:object)=>{
-      await (this.bot!.telegram as any).callApi('answerWidgetQuery',{widget_query_id:query.id,data:JSON.stringify(data)});
+      const encoded=JSON.stringify(data);
+      await (this.bot!.telegram as any).callApi('answerWidgetQuery',{widget_query_id:query.id,data:Buffer.byteLength(encoded)<=1024?encoded:JSON.stringify({ok:false,error:'Слишком много данных для виджета'})});
     };
     try{
       if(!query.chat||query.chat.type!=='private'||String(query.chat.id)!==String(query.from?.id)||!query.message_id){await answer({ok:false,error:'Доступно только в личном чате'});return;}
@@ -136,6 +257,7 @@ export class TelegramBotService {
         const user=await prisma.adminUser.findUnique({where:{telegramChatId:userId}});
         if(!user||!hasAccess(user)){await answer({ok:false,error:'Доступ к CRM не разрешён'});return;}
       }
+      if(String(query.data||'').startsWith('w2:')){await this.handleDashboardQuery(query,answer);return;}
       const match=/^w:(refresh|set):([0-9a-f-]{36})(?::([A-Z_]+))?$/.exec(query.data||'');
       if(!match){await answer({ok:false,error:'Неизвестное действие'});return;}
       const id=idSchema.parse(match[2]);
@@ -150,7 +272,7 @@ export class TelegramBotService {
       const client=await prisma.client.findUnique({where:{id},select:{status:true,aiNextStep:true}});
       if(!client){await answer({ok:false,error:'Клиент не найден'});return;}
       await answer({ok:true,label:widgetStatusLabels[client.status as keyof typeof widgetStatusLabels],next:(client.aiNextStep||'Уточнить задачу').slice(0,160)});
-    }catch(error){console.error('Widget query failed:',this.safeError(error));await answer({ok:false,error:'Не удалось обновить карточку'}).catch(()=>{});}
+    }catch(error){if(this.safeError(error).includes('query is too old'))return;console.error('Widget query failed:',this.safeError(error));await answer({ok:false,error:'Не удалось обновить карточку'}).catch(()=>{});}
   }
   private async styles(ctx:Context,id:string){
     this.session(ctx).activeClientId=id;
@@ -331,14 +453,14 @@ export class TelegramBotService {
     bot.command('menu',ctx=>this.home(ctx));bot.command('help',ctx=>this.help(ctx));bot.command('cancel',ctx=>this.cancel(ctx));
     bot.command('upload',ctx=>this.importHelp(ctx));
     bot.command('review',async ctx=>{const draft=await prisma.screenshotDraft.findFirst({where:{telegramUserId:String(ctx.from.id),expiresAt:{gt:new Date()}},orderBy:{createdAt:'desc'},select:{id:true}});if(draft)await this.showScreenshotDraft(ctx,draft.id);else await this.reply(ctx,'Нет переписки, ожидающей проверки. Отправьте скриншоты через «Загрузить переписку».');});
-    bot.command('clients',async ctx=>{const s=this.session(ctx);s.search=ctx.message.text.split(/\s+/).slice(1).join(' ');await this.clients(ctx,0,'dossier');});
-    bot.command('reply',async ctx=>{const s=this.session(ctx);if(s.activeClientId)await this.styles(ctx,s.activeClientId);else await this.clients(ctx,0,'reply');});
-    bot.command('pipeline',ctx=>this.pipeline(ctx));bot.command('knowledge',ctx=>this.knowledge(ctx));
+    bot.command('clients',async ctx=>{const s=this.session(ctx);s.search=ctx.message.text.split(/\s+/).slice(1).join(' ');if(s.search)await this.clients(ctx,0,'dossier');else try{await this.sendDashboardWidget(ctx,'clients:0');}catch{await this.clients(ctx,0,'dossier');}});
+    bot.command('reply',async ctx=>{const s=this.session(ctx);if(s.activeClientId)await this.styles(ctx,s.activeClientId);else try{await this.sendDashboardWidget(ctx,'clients:0');}catch{await this.clients(ctx,0,'reply');}});
+    bot.command('pipeline',async ctx=>{try{await this.sendDashboardWidget(ctx,'pipeline');}catch{await this.pipeline(ctx);}});bot.command('knowledge',async ctx=>{try{await this.sendDashboardWidget(ctx,'knowledge:0');}catch{await this.knowledge(ctx);}});
     bot.command('login',ctx=>this.login(ctx));bot.command('code',ctx=>this.login(ctx));
     bot.hears(BOT_LABELS.upload,ctx=>this.importHelp(ctx));
-    bot.hears(BOT_LABELS.clients,ctx=>{this.session(ctx).search='';return this.clients(ctx,0,'dossier');});
-    bot.hears(BOT_LABELS.reply,ctx=>{const s=this.session(ctx);return s.activeClientId?this.styles(ctx,s.activeClientId):this.clients(ctx,0,'reply');});
-    bot.hears(BOT_LABELS.pipeline,ctx=>this.pipeline(ctx));bot.hears(BOT_LABELS.knowledge,ctx=>this.knowledge(ctx));
+    bot.hears(BOT_LABELS.clients,async ctx=>{this.session(ctx).search='';try{await this.sendDashboardWidget(ctx,'clients:0');}catch{await this.clients(ctx,0,'dossier');}});
+    bot.hears(BOT_LABELS.reply,async ctx=>{const s=this.session(ctx);if(s.activeClientId)await this.styles(ctx,s.activeClientId);else try{await this.sendDashboardWidget(ctx,'clients:0');}catch{await this.clients(ctx,0,'reply');}});
+    bot.hears(BOT_LABELS.pipeline,async ctx=>{try{await this.sendDashboardWidget(ctx,'pipeline');}catch{await this.pipeline(ctx);}});bot.hears(BOT_LABELS.knowledge,async ctx=>{try{await this.sendDashboardWidget(ctx,'knowledge:0');}catch{await this.knowledge(ctx);}});
     bot.hears(BOT_LABELS.login,ctx=>this.login(ctx));bot.hears(BOT_LABELS.help,ctx=>this.help(ctx));
     bot.on('photo',ctx=>{const file=ctx.message.photo[ctx.message.photo.length-1];this.enqueueImage(ctx,file.file_id,'image/jpeg');});
     bot.on('document',async ctx=>{
@@ -384,7 +506,7 @@ export class TelegramBotService {
     bot.action(/^clients:(\d+)$/,async ctx=>{await ctx.answerCbQuery();await this.clients(ctx,Math.min(1e7,Number(ctx.match[1])));});
     bot.action(/^widget:([0-9a-f-]{36})$/,async ctx=>{
       await ctx.answerCbQuery();
-      try{await this.sendClientWidget(ctx,idSchema.parse(ctx.match[1]));}
+      try{await this.sendDashboardWidget(ctx,'card:'+idSchema.parse(ctx.match[1]));}
       catch(error){console.error('Widget send failed:',this.safeError(error));await this.reply(ctx,'Не удалось открыть интерактивную карточку. Обычная карточка доступна выше.');}
     });
     bot.action(/^(dossier|pickreply|pickattach|question|history|status|price):(.+)$/,async ctx=>{
