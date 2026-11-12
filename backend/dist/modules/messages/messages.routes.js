@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const upload_middleware_1 = require("../../middleware/upload.middleware");
+const messages_controller_1 = require("./messages.controller");
+const router = (0, express_1.Router)();
+router.post('/preview-screenshot', upload_middleware_1.uploadScreenshots, messages_controller_1.previewScreenshotHandler);
+router.post('/commit-screenshot', upload_middleware_1.uploadScreenshots, messages_controller_1.commitScreenshotHandler);
+router.post('/ingest-text', messages_controller_1.ingestTextDialogueHandler);
+router.post('/client/:clientId/manual', messages_controller_1.addManualMessagesHandler);
+router.get('/client/:clientId', messages_controller_1.getClientConversations);
+router.get('/chunk/:chunkId/messages', messages_controller_1.getChunkMessages);
+exports.default = router;

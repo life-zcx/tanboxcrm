@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const ai_controller_1 = require("./ai.controller");
+const pricing_controller_1 = require("../../pricing/pricing.controller");
+const router = (0, express_1.Router)();
+router.get('/status', ai_controller_1.getAIStatus);
+router.post('/suggest-reply', ai_controller_1.suggestReply);
+router.get('/draft-chat', ai_controller_1.getDraftChat);
+router.post('/draft-chat/revise', ai_controller_1.reviseDraft);
+router.get('/pricing', pricing_controller_1.getPricing);
+router.get('/quotes', pricing_controller_1.listQuotes);
+router.post('/quotes', pricing_controller_1.createQuote);
+router.post('/quotes/:id/revoke', pricing_controller_1.revokeQuote);
+exports.default = router;
